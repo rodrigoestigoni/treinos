@@ -1,3 +1,4 @@
+//ActiveWorkout.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +18,7 @@ import { useWorkout } from '../contexts/WorkoutContext';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/common/NavBar';
+import { loadSounds, playSound, toggleSoundEnabled, isSoundEnabled, workoutComplete } from '../utils/sounds';
 
 const ActiveWorkout = () => {
   const { workoutId } = useParams();
@@ -42,10 +44,8 @@ const ActiveWorkout = () => {
   const [previousWorkoutData, setPreviousWorkoutData] = useState(null);
   
   // References for sounds
-  const exerciseCompleteSound = useRef(null);
-  const restCompleteSound = useRef(null);
-  const countdownSound = useRef(null);
-  const workoutCompleteSound = useRef(null);
+  const sessionInitiatedRef = useRef(false);
+  
   
   // Vibration patterns
   const vibrationPatterns = {
@@ -73,24 +73,8 @@ const ActiveWorkout = () => {
   
   // Initialize sounds
   useEffect(() => {
-    exerciseCompleteSound.current = new Audio('/sounds/exercise-complete.mp3');
-    restCompleteSound.current = new Audio('/sounds/rest-complete.mp3');
-    countdownSound.current = new Audio('/sounds/countdown.mp3');
-    workoutCompleteSound.current = new Audio('/sounds/workout-complete.mp3');
-    
-    // Preload sounds
-    exerciseCompleteSound.current.load();
-    restCompleteSound.current.load();
-    countdownSound.current.load();
-    workoutCompleteSound.current.load();
-    
-    return () => {
-      // Clean up sound references
-      exerciseCompleteSound.current = null;
-      restCompleteSound.current = null;
-      countdownSound.current = null;
-      workoutCompleteSound.current = null;
-    };
+    // Carrega sons apenas uma vez
+    loadSounds();
   }, []);
   
   // Format elapsed time
@@ -105,69 +89,30 @@ const ActiveWorkout = () => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
   
-  // Load workout data and start a new session
   useEffect(() => {
-    const loadWorkout = async () => {
+    const loadWorkoutDetails = async () => {
       try {
         setLoading(true);
         
         // Fetch workout details
         const data = await getWorkoutById(workoutId);
-        setWorkout(data);
-        
-        // Start new workout session
-        const session = await startWorkout(workoutId);
-        if (session && session.id) {
-          setSessionId(session.id);
+        if (data) {
+          setWorkout(data);
+          
+          // Initialize exercise progress
+          const progress = {};
+          data.workout_exercises.forEach(exercise => {
+            progress[exercise.exercise_detail.id] = {
+              sets: Array(exercise.sets).fill({
+                completed: false,
+                actualReps: exercise.target_reps,
+                weight: 0
+              })
+            };
+          });
+          setExerciseProgress(progress);
+          
         }
-        
-        // Initialize exercise progress
-        const progress = {};
-        data.workout_exercises.forEach(exercise => {
-          progress[exercise.exercise_detail.id] = {
-            sets: Array(exercise.sets).fill({
-              completed: false,
-              actualReps: exercise.target_reps,
-              weight: 0
-            })
-          };
-        });
-        setExerciseProgress(progress);
-        
-        // Fetch previous workout data for this workout if available
-        // This would be implemented to show previous weights/reps
-        // TODO: Add API endpoint for this
-        
-        // For demo purposes, let's set some example previous workout data
-        const examplePreviousData = {
-          lastPerformed: "7 dias atrás",
-          exercises: {}
-        };
-        
-        data.workout_exercises.forEach(exercise => {
-          examplePreviousData.exercises[exercise.exercise_detail.id] = {
-            sets: Array(exercise.sets).fill({
-              reps: exercise.target_reps - 2,
-              weight: exercise.exercise_detail.name.includes("Flexão") ? 0 : 10
-            })
-          };
-        });
-        
-        setPreviousWorkoutData(examplePreviousData);
-        
-        // Initialize weights for each exercise
-        const initialWeights = {};
-        data.workout_exercises.forEach(exercise => {
-          // For bodyweight exercises, default to 0
-          const isBodyweight = exercise.exercise_detail.name.includes("Flexão") || 
-                             exercise.exercise_detail.name.includes("Prancha") ||
-                             exercise.exercise_detail.name.includes("Abdominal");
-                             
-          initialWeights[exercise.exercise_detail.id] = isBodyweight ? 0 : 10;
-        });
-        
-        setWeights(initialWeights);
-        
       } catch (error) {
         console.error('Error loading workout:', error);
         errorToast('Erro ao carregar treino');
@@ -176,8 +121,35 @@ const ActiveWorkout = () => {
       }
     };
     
-    loadWorkout();
-  }, [workoutId, getWorkoutById, startWorkout, errorToast]);
+    loadWorkoutDetails();
+  }, [workoutId, getWorkoutById, errorToast]); // REMOVA startWorkout das dependências
+  
+  // Segundo useEffect - só para iniciar a sessão depois que o treino foi carregado
+  useEffect(() => {
+    // Só executa quando o workout foi carregado e ainda não temos uma sessão
+    if (!workout || sessionId || sessionInitiatedRef.current) return;
+    
+    // Marca que já tentou iniciar
+    sessionInitiatedRef.current = true;
+    
+    const startSession = async () => {
+      try {
+        const session = await startWorkout(workoutId);
+        if (session && session.id) {
+          setSessionId(session.id);
+        }
+      } catch (error) {
+        console.error('Error starting workout session:', error);
+        errorToast('Erro ao iniciar sessão de treino');
+      }
+    };
+    
+    startSession();
+    
+    return () => {
+        sessionInitiatedRef.current = false;
+    };
+  }, [workout, sessionId, workoutId]);
   
   // Handle beforeunload event to warn user if they try to navigate away
   useEffect(() => {
@@ -211,7 +183,8 @@ const ActiveWorkout = () => {
   
   // Toggle sound on/off
   const toggleSound = () => {
-    setSoundEnabled(!soundEnabled);
+    const enabled = toggleSoundEnabled();
+    setSoundEnabled(enabled);
   };
   
   if (loading || !workout) {
@@ -247,7 +220,7 @@ const ActiveWorkout = () => {
   
   const handleExerciseComplete = () => {
     // Play sound and vibrate
-    playSound(exerciseCompleteSound);
+    playSound('exerciseComplete');
     vibrate(vibrationPatterns.exerciseComplete);
     
     setIsResting(true);
@@ -255,7 +228,7 @@ const ActiveWorkout = () => {
   
   const handleRestComplete = () => {
     // Play sound and vibrate
-    playSound(restCompleteSound);
+    playSound('restComplete');
     vibrate(vibrationPatterns.restComplete);
     
     setIsResting(false);
@@ -287,7 +260,7 @@ const ActiveWorkout = () => {
     if (isLastSet) {
       if (isLastExercise) {
         // Workout complete
-        playSound(workoutCompleteSound);
+        playSound('workoutComplete');
         vibrate(vibrationPatterns.workoutComplete);
         setShowCompletionDialog(true);
       } else {

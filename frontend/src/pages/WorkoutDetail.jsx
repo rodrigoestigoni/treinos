@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import NavBar from '../components/common/NavBar';
 import { useWorkout } from '../contexts/WorkoutContext';
@@ -8,51 +8,46 @@ import { ArrowLeftIcon, PlayIcon, ClockIcon } from '@heroicons/react/24/outline'
 const WorkoutDetail = () => {
   const { workoutId } = useParams();
   const navigate = useNavigate();
-  const { getWorkoutById, startWorkout, loading } = useWorkout();
+  const { getWorkoutById, startWorkout, loading: contextLoading } = useWorkout();
   const { errorToast } = useToast();
   const [workout, setWorkout] = useState(null);
   const [loadError, setLoadError] = useState(false);
-  const [loadAttempted, setLoadAttempted] = useState(false);
+  const [localLoading, setLocalLoading] = useState(false);
+  
+  // Usar uma referência para rastrear se já tentamos carregar
+  const loadAttemptedRef = useRef(false);
   
   useEffect(() => {
-    // Evitar loop infinito verificando se o workoutId é válido
-    if (!workoutId) {
-      setLoadError(true);
+    // Se não temos ID ou já tentamos carregar, não faz nada
+    if (!workoutId || loadAttemptedRef.current) {
       return;
     }
     
-    // Evitar múltiplas requisições
-    if (loadAttempted) return;
+    // Marcar que já tentamos carregar para evitar ciclos
+    loadAttemptedRef.current = true;
     
-    let isMounted = true;
     const fetchWorkout = async () => {
       try {
-        setLoadAttempted(true);
-        console.log("Fetching workout with ID:", workoutId);
+        setLocalLoading(true);
         const data = await getWorkoutById(workoutId);
-        if (data && isMounted) {
-          console.log("Workout data received:", data);
+        
+        if (data) {
           setWorkout(data);
-        } else if (isMounted) {
+        } else {
           setLoadError(true);
           errorToast('Não foi possível carregar os detalhes do treino');
         }
       } catch (error) {
-        if (isMounted) {
-          console.error('Erro ao carregar treino:', error);
-          setLoadError(true);
-          errorToast('Erro ao carregar treino. Tente novamente mais tarde.');
-        }
+        console.error('Erro ao carregar treino:', error);
+        setLoadError(true);
+        errorToast('Erro ao carregar treino. Tente novamente mais tarde.');
+      } finally {
+        setLocalLoading(false);
       }
     };
     
     fetchWorkout();
-    
-    // Limpeza para evitar vazamentos de memória
-    return () => {
-      isMounted = false;
-    };
-  }, [workoutId, getWorkoutById, errorToast, loadAttempted]);
+  }, [workoutId, errorToast]); // REMOVIDO getWorkoutById das dependências para evitar loop!
   
   const handleStartWorkout = async () => {
     try {
@@ -87,7 +82,8 @@ const WorkoutDetail = () => {
     );
   }
   
-  if (loading || !workout) {
+  // Mostra loading enquanto estiver carregando localmente OU no contexto
+  if (localLoading || contextLoading || !workout) {
     return (
       <>
         <NavBar />
@@ -138,14 +134,14 @@ const WorkoutDetail = () => {
         
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
           <h2 className="text-lg font-semibold mb-2">Descrição</h2>
-          <p className="text-gray-700 dark:text-gray-300">{workout.description}</p>
+          <p className="text-gray-700 dark:text-gray-300">{workout.description || "Sem descrição"}</p>
         </div>
         
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
           <h2 className="text-lg font-semibold mb-4">Exercícios</h2>
           
           <div className="space-y-4">
-            {workout.exercises?.map((exercise, index) => (
+            {workout.workout_exercises && workout.workout_exercises.map((exercise, index) => (
               <div 
                 key={index}
                 className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"

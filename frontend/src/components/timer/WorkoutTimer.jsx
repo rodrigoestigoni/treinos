@@ -1,3 +1,4 @@
+// WorkoutTimer.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -8,7 +9,7 @@ import {
   SpeakerWaveIcon,
   SpeakerXMarkIcon
 } from '@heroicons/react/24/solid';
-
+import { playSound as playSoundUtil } from '../../utils/sounds';
 const WorkoutTimer = ({ 
   exerciseDuration = 0, 
   restDuration = 60, 
@@ -18,7 +19,7 @@ const WorkoutTimer = ({
   totalSets,
   setMode,
   mode,
-  playSound = true
+  playSound = true  // Esta é a prop
 }) => {
   const [timeLeft, setTimeLeft] = useState(mode === 'exercise' ? (exerciseDuration > 0 ? exerciseDuration : 0) : restDuration);
   const [isActive, setIsActive] = useState(false);
@@ -30,17 +31,9 @@ const WorkoutTimer = ({
   
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
-  const audioRef = useRef(null);
-  const tickSoundRef = useRef(null);
-  const finalTickSoundRef = useRef(null);
   const totalTime = mode === 'exercise' ? exerciseDuration : restDuration;
   
-  // Criar elementos de áudio para notificações
   useEffect(() => {
-    audioRef.current = new Audio('/sounds/notification.mp3');
-    tickSoundRef.current = new Audio('/sounds/tick.mp3');
-    finalTickSoundRef.current = new Audio('/sounds/final-tick.mp3');
-    
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
@@ -67,8 +60,8 @@ const WorkoutTimer = ({
             clearInterval(timerRef.current);
             
             // Tocar som de notificação
-            if (!isMuted && audioRef.current) {
-              audioRef.current.play().catch(e => console.log("Erro ao tocar áudio:", e));
+            if (!isMuted) {
+              playSoundUtil('notification');  // Use a função renomeada
             }
             
             // Vibrar o dispositivo
@@ -93,10 +86,10 @@ const WorkoutTimer = ({
           
           // Tocar sons nos últimos 3 segundos
           if (newTime <= 3 && !isMuted) {
-            if (newTime === 0 && finalTickSoundRef.current) {
-              finalTickSoundRef.current.play().catch(e => console.log("Erro ao tocar áudio:", e));
-            } else if (tickSoundRef.current) {
-              tickSoundRef.current.play().catch(e => console.log("Erro ao tocar áudio:", e));
+            if (newTime === 0) {
+              playSoundUtil('finalTick');  // Use a função renomeada
+            } else {
+              playSoundUtil('tick');  // Use a função renomeada
             }
             
             // Vibrar o dispositivo a cada segundo nos últimos 3 segundos
@@ -111,7 +104,7 @@ const WorkoutTimer = ({
     } else {
       clearInterval(timerRef.current);
     }
-
+  
     return () => clearInterval(timerRef.current);
   }, [isActive, mode, exerciseDuration, restDuration, totalTime, onComplete, isMuted]);
   
