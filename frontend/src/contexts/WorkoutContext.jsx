@@ -1,4 +1,4 @@
-// src/contexts/WorkoutContext.jsx
+// frontend/src/contexts/WorkoutContext.jsx
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from './AuthContext';
@@ -9,18 +9,13 @@ const WorkoutContext = createContext();
 export const useWorkout = () => useContext(WorkoutContext);
 
 export const WorkoutProvider = ({ children }) => {
-  const { token, isAuthenticated } = useAuth();
+  const { token, isAuthenticated, apiBaseUrl } = useAuth();
   const { errorToast } = useToast();
   const [workouts, setWorkouts] = useState([]);
   const [activeWorkout, setActiveWorkout] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
-
-  // Definir a base URL para APIs
-  const apiBaseUrl = window.location.hostname === 'localhost' 
-    ? 'http://localhost:8550/api/v1' 
-    : '/api/v1';
 
   // Configuração de cabeçalhos para requisições
   const getHeaders = useCallback(() => {
@@ -69,28 +64,10 @@ export const WorkoutProvider = ({ children }) => {
     setError(null);
     
     try {
-      // Usando axios diretamente com URL absoluta para depuração
-      console.log("Requesting workout with ID:", id);
-      console.log("API URL:", `${apiBaseUrl}/workouts/${id}/`);
-      
       const response = await axios.get(`${apiBaseUrl}/workouts/${id}/`, getHeaders());
-      console.log("Response status:", response.status);
       return response.data;
     } catch (err) {
       console.error('Erro ao carregar treino:', err);
-      // Verificar o tipo de erro
-      if (err.response) {
-        // O servidor respondeu com um status fora do intervalo 2xx
-        console.error('Status do erro:', err.response.status);
-        console.error('Dados do erro:', err.response.data);
-      } else if (err.request) {
-        // A requisição foi feita mas não houve resposta
-        console.error('Sem resposta do servidor');
-      } else {
-        // Algo aconteceu na configuração da requisição
-        console.error('Erro de configuração:', err.message);
-      }
-      
       setError('Erro ao carregar treino.');
       errorToast('Não foi possível carregar o treino');
       return null;
@@ -169,40 +146,13 @@ export const WorkoutProvider = ({ children }) => {
     setError(null);
     
     try {
-      const response = await axios.post(`${apiBaseUrl}/workout-sessions/`, {
-        workout: workoutId
-      }, getHeaders());
+      const response = await axios.post(`${apiBaseUrl}/workouts/${workoutId}/start_session/`, {}, getHeaders());
       setActiveWorkout(response.data);
       return response.data;
     } catch (err) {
       console.error('Erro ao iniciar treino:', err);
       setError('Erro ao iniciar treino.');
       errorToast('Não foi possível iniciar o treino');
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateExerciseProgress = async (sessionId, exerciseId, setNumber, repsCompleted, weight = null) => {
-    if (!isAuthenticated || !token) return null;
-    
-    setLoading(true);
-    setError(null);
-    
-    try {
-      const response = await axios.post(`${apiBaseUrl}/exercise-logs/`, {
-        session: sessionId,
-        workout_exercise: exerciseId,
-        set_number: setNumber,
-        reps_completed: repsCompleted,
-        weight: weight
-      }, getHeaders());
-      return response.data;
-    } catch (err) {
-      console.error('Erro ao salvar progresso do exercício:', err);
-      setError('Erro ao salvar progresso do exercício.');
-      errorToast('Não foi possível registrar o progresso');
       return null;
     } finally {
       setLoading(false);
@@ -229,6 +179,31 @@ export const WorkoutProvider = ({ children }) => {
     }
   };
 
+  const recordExerciseSet = async (sessionId, exerciseId, setNumber, actualReps, weight = null) => {
+    if (!isAuthenticated || !token) return null;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const response = await axios.post(`${apiBaseUrl}/workout-sessions/${sessionId}/record_set/`, {
+        exercise_id: exerciseId,
+        set_number: setNumber,
+        actual_reps: actualReps,
+        weight: weight
+      }, getHeaders());
+      
+      return response.data;
+    } catch (err) {
+      console.error('Erro ao salvar série:', err);
+      setError('Erro ao salvar progresso do exercício.');
+      errorToast('Não foi possível registrar a série');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <WorkoutContext.Provider
       value={{
@@ -242,7 +217,7 @@ export const WorkoutProvider = ({ children }) => {
         updateWorkout,
         deleteWorkout,
         startWorkout,
-        updateExerciseProgress,
+        recordExerciseSet,
         completeWorkout
       }}
     >

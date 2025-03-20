@@ -10,6 +10,7 @@ done
 echo "Banco de dados disponível!"
 
 # Aplicar migrações
+python manage.py makemigrations core
 python manage.py migrate
 
 # Coletar arquivos estáticos

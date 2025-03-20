@@ -38,10 +38,7 @@ INSTALLED_APPS = [
     'channels',
     
     # Apps personalizados
-    'apps.accounts',
-    'apps.exercises',
-    'apps.workouts',
-    'apps.gamification',
+    'apps.core'
 ]
 
 MIDDLEWARE = [
@@ -109,7 +106,7 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Configurar o modelo de usuário personalizado
-AUTH_USER_MODEL = 'accounts.User'
+AUTH_USER_MODEL = 'core.User'
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.0/topics/i18n/
@@ -167,8 +164,13 @@ SIMPLE_JWT = {
 
 # Configurações CORS
 CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', 'localhost,127.0.0.1,treinos.ultimoingresso.com.br').split(',')
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://treinos.ultimoingresso.com.br'
+]
 
+# Em desenvolvimento, permitir todas as origens para facilitar testes
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 

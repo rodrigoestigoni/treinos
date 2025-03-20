@@ -1,52 +1,144 @@
-# backend/califit/core/views.py
-from rest_framework import viewsets, status, mixins
+from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import ValidationError
 from django.db.models import Count, Sum, Q
 from django.utils import timezone
-from django.shortcuts import get_object_or_404
 from datetime import datetime, timedelta
 
 from .models import (
-    User, Exercise, MuscleGroup, Workout, WorkoutExercise, 
-    WorkoutSession, ExerciseRecord, SetRecord, Supplement,
-    SupplementRecord, Achievement, UserAchievement, Notification
+    User, UserBodyMeasurement,
+    MuscleGroup, Exercise,
+    Workout, WorkoutExercise, WorkoutSession,
+    ExerciseRecord, SetRecord,
+    Supplement, SupplementRecord,
+    Achievement, UserAchievement,
+    Challenge, UserChallenge,
+    Notification
 )
 
 from .serializers import (
-    UserSerializer, ExerciseSerializer, MuscleGroupSerializer,
+    UserSerializer, UserProfileSerializer, UserBodyMeasurementSerializer,
+    MuscleGroupSerializer, ExerciseSerializer,
     WorkoutSerializer, WorkoutExerciseSerializer, WorkoutSessionSerializer,
-    ExerciseRecordSerializer, SetRecordSerializer, SupplementSerializer,
-    SupplementRecordSerializer, AchievementSerializer, UserAchievementSerializer,
-    NotificationSerializer, WorkoutCreateSerializer, WorkoutDetailSerializer,
-    WorkoutSessionDetailSerializer, UserProfileSerializer
+    ExerciseRecordSerializer, SetRecordSerializer,
+    SupplementSerializer, SupplementRecordSerializer,
+    AchievementSerializer, UserAchievementSerializer,
+    ChallengeSerializer, UserChallengeSerializer,
+    NotificationSerializer, WorkoutDetailSerializer, WorkoutSessionDetailSerializer
 )
+
+# ViewSet para usuários
+class UserViewSet(viewsets.ModelViewSet):
+    serializer_class = UserSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return User.objects.all()
+        return User.objects.filter(id=self.request.user.id)
+    
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.AllowAny()]
+        return super().get_permissions()
+    
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Obter estatísticas do usuário"""
+        user = request.user
+        
+        # Estatísticas básicas
+        total_workouts = WorkoutSession.objects.filter(
+            user=user, 
+            end_time__isnull=False
+        ).count()
+        
+        total_duration = WorkoutSession.objects.filter(
+            user=user,
+            end_time__isnull=False
+        ).aggregate(Sum('duration'))['duration__sum'] or 0
+        
+        # Formatar em horas
+        total_hours = total_duration / 3600
+        
+        # Treinos por grupo muscular
+        muscle_groups = MuscleGroup.objects.all()
+        muscle_group_stats = []
+        
+        for group in muscle_groups:
+            count = ExerciseRecord.objects.filter(
+                session__user=user,
+                session__end_time__isnull=False,
+                exercise__muscle_groups=group
+            ).count()
+            
+            muscle_group_stats.append({
+                'name': group.name,
+                'count': count
+            })
+        
+        # Estatísticas de streak
+        max_streak = user.streak_count  # Simplificação - em um app real, você rastrearia o máximo histórico
+        current_streak = user.streak_count
+        
+        # Estatísticas de XP e nível
+        next_level_xp = user.level * 100
+        
+        # Calcular número de dias treinados nos últimos 30 dias
+        thirty_days_ago = timezone.now().date() - timedelta(days=30)
+        workout_dates = WorkoutSession.objects.filter(
+            user=user,
+            end_time__isnull=False,
+            start_time__date__gte=thirty_days_ago
+        ).values('start_time__date').distinct().count()
+        
+        return Response({
+            'total_workouts': total_workouts,
+            'total_hours': round(total_hours, 1),
+            'current_streak': current_streak,
+            'max_streak': max_streak,
+            'level': user.level,
+            'total_xp': user.total_xp,
+            'xp_to_next_level': user.xp_to_next_level,
+            'level_progress': user.level_progress_percentage,
+            'muscle_group_stats': muscle_group_stats,
+            'days_trained_last_30': workout_dates
+        })
+
+
+class UserBodyMeasurementViewSet(viewsets.ModelViewSet):
+    serializer_class = UserBodyMeasurementSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return UserBodyMeasurement.objects.filter(user=self.request.user)
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 
 class MuscleGroupViewSet(viewsets.ModelViewSet):
-    """API para gerenciar grupos musculares"""
     queryset = MuscleGroup.objects.all()
     serializer_class = MuscleGroupSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
 
 
 class ExerciseViewSet(viewsets.ModelViewSet):
-    """API para gerenciar exercícios"""
     serializer_class = ExerciseSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        """Retornar todos os exercícios ou apenas do usuário atual"""
-        # Administradores veem todos os exercícios, usuários comuns só veem os próprios
         user = self.request.user
         if user.is_staff:
             return Exercise.objects.all()
-        return Exercise.objects.filter(user=user)
+        return Exercise.objects.filter(Q(user=user) | Q(user__is_staff=True))
     
     def perform_create(self, serializer):
-        """Salvar o usuário atual como criador do exercício"""
         serializer.save(user=self.request.user)
     
     @action(detail=False, methods=['get'])
@@ -70,23 +162,20 @@ class ExerciseViewSet(viewsets.ModelViewSet):
 
 
 class WorkoutViewSet(viewsets.ModelViewSet):
-    """API para gerenciar treinos"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_serializer_class(self):
-        """Selecionar serializer apropriado baseado na ação"""
-        if self.action == 'create' or self.action == 'update' or self.action == 'partial_update':
-            return WorkoutCreateSerializer
+        if self.action in ['create', 'update', 'partial_update']:
+            return WorkoutDetailSerializer
         elif self.action == 'retrieve':
             return WorkoutDetailSerializer
         return WorkoutSerializer
     
     def get_queryset(self):
-        """Retornar apenas treinos do usuário atual"""
-        return Workout.objects.filter(user=self.request.user)
+        user = self.request.user
+        return Workout.objects.filter(Q(user=user) | Q(is_template=True))
     
     def perform_create(self, serializer):
-        """Salvar o usuário atual como criador do treino"""
         serializer.save(user=self.request.user)
     
     @action(detail=True, methods=['post'])
@@ -101,7 +190,7 @@ class WorkoutViewSet(viewsets.ModelViewSet):
         )
         
         # Inicializar registros de exercícios
-        for workout_exercise in workout.exercises.all():
+        for workout_exercise in workout.workout_exercises.all():
             exercise_record = ExerciseRecord.objects.create(
                 session=session,
                 exercise=workout_exercise.exercise,
@@ -119,9 +208,16 @@ class WorkoutViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class WorkoutExerciseViewSet(viewsets.ModelViewSet):
+    serializer_class = WorkoutExerciseSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return WorkoutExercise.objects.filter(workout__user=self.request.user)
+
+
 class WorkoutSessionViewSet(viewsets.ModelViewSet):
-    """API para gerenciar sessões de treino"""
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -143,12 +239,13 @@ class WorkoutSessionViewSet(viewsets.ModelViewSet):
             )
         
         # Finalizar sessão e calcular estatísticas
-        xp_earned = session.complete_session()
+        xp_earned, level_up = session.complete_session()
         
         serializer = self.get_serializer(session)
         return Response({
             "session": serializer.data,
             "xp_earned": xp_earned,
+            "level_up": level_up,
             "message": "Sessão finalizada com sucesso!"
         })
     
@@ -215,10 +312,25 @@ class WorkoutSessionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class ExerciseRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = ExerciseRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return ExerciseRecord.objects.filter(session__user=self.request.user)
+
+
+class SetRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = SetRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return SetRecord.objects.filter(exercise_record__session__user=self.request.user)
+
+
 class SupplementViewSet(viewsets.ModelViewSet):
-    """API para gerenciar suplementos"""
     serializer_class = SupplementSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         return Supplement.objects.filter(user=self.request.user)
@@ -286,37 +398,122 @@ class SupplementViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+class SupplementRecordViewSet(viewsets.ModelViewSet):
+    serializer_class = SupplementRecordSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return SupplementRecord.objects.filter(supplement__user=self.request.user)
+    
+    def perform_create(self, serializer):
+        supplement_id = self.request.data.get('supplement')
+        supplement = Supplement.objects.get(id=supplement_id, user=self.request.user)
+        serializer.save(supplement=supplement)
+
+
 class AchievementViewSet(viewsets.ReadOnlyModelViewSet):
-    """API para listar conquistas (somente leitura)"""
     queryset = Achievement.objects.all()
     serializer_class = AchievementSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     
     @action(detail=False, methods=['get'])
     def my_achievements(self, request):
         """Listar conquistas do usuário atual"""
         user_achievements = UserAchievement.objects.filter(user=request.user)
+        serializer = UserAchievementSerializer(user_achievements, many=True)
+        return Response(serializer.data)
+
+
+class UserAchievementViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = UserAchievementSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return UserAchievement.objects.filter(user=self.request.user)
+
+
+class ChallengeViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Challenge.objects.filter(is_active=True)
+    serializer_class = ChallengeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=True, methods=['post'])
+    def join(self, request, pk=None):
+        """Participar de um desafio"""
+        challenge = self.get_object()
         
-        # Preparar dados para exibição
-        result = []
-        for user_achievement in user_achievements:
-            achievement = user_achievement.achievement
-            result.append({
-                'id': achievement.id,
-                'name': achievement.name,
-                'description': achievement.description,
-                'xp_reward': achievement.xp_reward,
-                'icon_name': achievement.icon_name,
-                'earned_date': user_achievement.earned_date
-            })
+        # Verificar se o desafio ainda está aberto
+        today = timezone.now().date()
+        if today > challenge.end_date:
+            return Response(
+                {"error": "Este desafio já terminou"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
         
-        return Response(result)
+        # Verificar se o usuário já participa
+        if UserChallenge.objects.filter(user=request.user, challenge=challenge).exists():
+            return Response(
+                {"error": "Você já está participando deste desafio"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Criar participação
+        user_challenge = UserChallenge.objects.create(
+            user=request.user,
+            challenge=challenge
+        )
+        
+        serializer = UserChallengeSerializer(user_challenge)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class UserChallengeViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = UserChallengeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return UserChallenge.objects.filter(user=self.request.user)
+    
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        """Marcar um desafio como concluído"""
+        user_challenge = self.get_object()
+        
+        if user_challenge.completed:
+            return Response(
+                {"error": "Este desafio já foi concluído"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user_challenge.completed = True
+        user_challenge.completed_at = timezone.now()
+        user_challenge.save()
+        
+        # Adicionar XP ao usuário
+        challenge = user_challenge.challenge
+        level_up = request.user.add_xp(challenge.xp_reward)
+        
+        # Enviar notificação
+        Notification.objects.create(
+            user=request.user,
+            title=f"Desafio Concluído: {challenge.name}",
+            message=f"Parabéns! Você concluiu o desafio '{challenge.name}' e ganhou {challenge.xp_reward} XP!",
+            type='achievement',
+            icon='challenge_complete',
+            action_url='/challenges'
+        )
+        
+        serializer = self.get_serializer(user_challenge)
+        return Response({
+            "user_challenge": serializer.data,
+            "xp_gained": challenge.xp_reward,
+            "level_up": level_up
+        })
 
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
-    """API para gerenciar notificações"""
     serializer_class = NotificationSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         return Notification.objects.filter(user=self.request.user)
@@ -335,82 +532,10 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     def mark_all_read(self, request):
         """Marcar todas as notificações como lidas"""
         self.get_queryset().update(read=True)
-        return Response({"status": "Todas as notificações foram marcadas como lidas"})
+        return Response({"message": "Todas as notificações foram marcadas como lidas"})
     
     @action(detail=False, methods=['get'])
     def unread_count(self, request):
         """Contar notificações não lidas"""
         count = self.get_queryset().filter(read=False).count()
         return Response({"unread_count": count})
-
-
-class UserProfileViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.UpdateModelMixin):
-    """API para gerenciar perfil de usuário"""
-    serializer_class = UserProfileSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_object(self):
-        return self.request.user
-    
-    @action(detail=False, methods=['get'])
-    def stats(self, request):
-        """Obter estatísticas do usuário"""
-        user = request.user
-        
-        # Estatísticas básicas
-        total_workouts = WorkoutSession.objects.filter(
-            user=user, 
-            end_time__isnull=False
-        ).count()
-        
-        total_duration = WorkoutSession.objects.filter(
-            user=user,
-            end_time__isnull=False
-        ).aggregate(Sum('duration'))['duration__sum'] or 0
-        
-        # Formatar em horas
-        total_hours = total_duration / 3600
-        
-        # Treinos por grupo muscular
-        muscle_groups = MuscleGroup.objects.all()
-        muscle_group_stats = []
-        
-        for group in muscle_groups:
-            count = ExerciseRecord.objects.filter(
-                session__user=user,
-                session__end_time__isnull=False,
-                exercise__muscle_groups=group
-            ).count()
-            
-            muscle_group_stats.append({
-                'name': group.name,
-                'count': count
-            })
-        
-        # Estatísticas de streak
-        max_streak = user.streak_count  # Simplificação - em um app real, você rastrearia o máximo histórico
-        current_streak = user.streak_count
-        
-        # Estatísticas de XP e nível
-        next_level_xp = user.level * 100
-        
-        # Calcular número de dias treinados nos últimos 30 dias
-        thirty_days_ago = timezone.now().date() - timedelta(days=30)
-        workout_dates = WorkoutSession.objects.filter(
-            user=user,
-            end_time__isnull=False,
-            start_time__date__gte=thirty_days_ago
-        ).values('start_time__date').distinct().count()
-        
-        return Response({
-            'total_workouts': total_workouts,
-            'total_hours': round(total_hours, 1),
-            'current_streak': current_streak,
-            'max_streak': max_streak,
-            'level': user.level,
-            'total_xp': user.total_xp,
-            'xp_to_next_level': user.xp_to_next_level,
-            'level_progress': user.level_progress_percentage,
-            'muscle_group_stats': muscle_group_stats,
-            'days_trained_last_30': workout_dates
-        })

@@ -1,18 +1,31 @@
-# backend/califit/core/serializers.py
 from rest_framework import serializers
 from .models import (
-    User, Exercise, MuscleGroup, Workout, WorkoutExercise, 
-    WorkoutSession, ExerciseRecord, SetRecord, Supplement,
-    SupplementRecord, Achievement, UserAchievement, Notification
+    User, UserBodyMeasurement,
+    MuscleGroup, Exercise,
+    Workout, WorkoutExercise, WorkoutSession,
+    ExerciseRecord, SetRecord,
+    Supplement, SupplementRecord,
+    Achievement, UserAchievement,
+    Challenge, UserChallenge,
+    Notification
 )
 
-
 class UserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 
-                 'level', 'xp', 'streak_count', 'last_workout_date']
-        read_only_fields = ['level', 'xp', 'streak_count', 'last_workout_date']
+        fields = ['id', 'username', 'email', 'password', 'first_name', 'last_name', 
+                 'date_of_birth', 'height', 'weight', 'profile_image', 
+                 'level', 'xp_points', 'streak_count', 'last_workout_date']
+        read_only_fields = ['level', 'xp_points', 'streak_count', 'last_workout_date']
+    
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -23,19 +36,26 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name', 
-            'level', 'xp', 'total_xp', 'streak_count', 'last_workout_date',
+            'level', 'xp_points', 'total_xp', 'streak_count', 'last_workout_date',
             'xp_to_next_level', 'level_progress_percentage', 'height', 'weight'
         ]
         read_only_fields = [
-            'level', 'xp', 'total_xp', 'streak_count', 'last_workout_date',
+            'level', 'xp_points', 'total_xp', 'streak_count', 'last_workout_date',
             'xp_to_next_level', 'level_progress_percentage'
         ]
+
+
+class UserBodyMeasurementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserBodyMeasurement
+        fields = '__all__'
+        read_only_fields = ['user']
 
 
 class MuscleGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = MuscleGroup
-        fields = ['id', 'name']
+        fields = ['id', 'name', 'description', 'icon']
 
 
 class ExerciseSerializer(serializers.ModelSerializer):
@@ -54,7 +74,7 @@ class ExerciseSerializer(serializers.ModelSerializer):
             'equipment_needed', 'image', 'video_url', 'muscle_groups',
             'muscle_group_ids', 'created_at'
         ]
-        read_only_fields = ['created_at']
+        read_only_fields = ['created_at', 'user']
     
     def create(self, validated_data):
         muscle_groups = validated_data.pop('muscle_groups')
@@ -89,54 +109,81 @@ class WorkoutExerciseSerializer(serializers.ModelSerializer):
 class WorkoutSerializer(serializers.ModelSerializer):
     class Meta:
         model = Workout
-        fields = ['id', 'name', 'description', 'is_template', 'created_at']
-        read_only_fields = ['created_at']
+        fields = ['id', 'name', 'description', 'is_template', 'estimated_duration',
+                 'difficulty', 'created_at', 'exercise_count']
+        read_only_fields = ['created_at', 'exercise_count']
 
 
 class WorkoutDetailSerializer(serializers.ModelSerializer):
-    exercises = WorkoutExerciseSerializer(many=True, read_only=True)
+    workout_exercises = WorkoutExerciseSerializer(many=True, read_only=True)
     
     class Meta:
         model = Workout
-        fields = ['id', 'name', 'description', 'is_template', 'created_at', 'exercises']
+        fields = ['id', 'name', 'description', 'is_template', 'estimated_duration',
+                 'difficulty', 'created_at', 'workout_exercises']
         read_only_fields = ['created_at']
-
-
-class WorkoutCreateSerializer(serializers.ModelSerializer):
-    exercises = WorkoutExerciseSerializer(many=True)
-    
-    class Meta:
-        model = Workout
-        fields = ['id', 'name', 'description', 'is_template', 'exercises']
     
     def create(self, validated_data):
-        exercises_data = validated_data.pop('exercises')
+        workout_exercises = self.context['request'].data.get('workout_exercises', [])
         workout = Workout.objects.create(**validated_data)
         
-        for i, exercise_data in enumerate(exercises_data):
-            # Garantir ordem crescente se não especificado
-            if 'order' not in exercise_data:
-                exercise_data['order'] = i
-            
-            WorkoutExercise.objects.create(workout=workout, **exercise_data)
-        
+        for i, exercise_data in enumerate(workout_exercises):
+            exercise_id = exercise_data.get('exercise_id')
+            if not exercise_id:
+                continue
+                
+            try:
+                exercise = Exercise.objects.get(id=exercise_id)
+                WorkoutExercise.objects.create(
+                    workout=workout,
+                    exercise=exercise,
+                    order=exercise_data.get('order', i),
+                    sets=exercise_data.get('sets', 3),
+                    target_reps=exercise_data.get('target_reps', 12),
+                    rest_duration=exercise_data.get('rest_duration', 60),
+                    notes=exercise_data.get('notes', '')
+                )
+            except Exercise.DoesNotExist:
+                pass
+                
         return workout
     
     def update(self, instance, validated_data):
-        if 'exercises' in validated_data:
-            exercises_data = validated_data.pop('exercises')
-            
-            # Remover exercícios existentes
-            instance.exercises.all().delete()
-            
-            # Criar novos exercícios
-            for i, exercise_data in enumerate(exercises_data):
-                if 'order' not in exercise_data:
-                    exercise_data['order'] = i
-                
-                WorkoutExercise.objects.create(workout=instance, **exercise_data)
+        workout_exercises = self.context['request'].data.get('workout_exercises', [])
         
-        return super().update(instance, validated_data)
+        # Atualizar campos do treino
+        instance.name = validated_data.get('name', instance.name)
+        instance.description = validated_data.get('description', instance.description)
+        instance.is_template = validated_data.get('is_template', instance.is_template)
+        instance.estimated_duration = validated_data.get('estimated_duration', instance.estimated_duration)
+        instance.difficulty = validated_data.get('difficulty', instance.difficulty)
+        instance.save()
+        
+        # Remover exercícios existentes se novos foram fornecidos
+        if workout_exercises:
+            instance.workout_exercises.all().delete()
+            
+            # Adicionar novos exercícios
+            for i, exercise_data in enumerate(workout_exercises):
+                exercise_id = exercise_data.get('exercise_id')
+                if not exercise_id:
+                    continue
+                    
+                try:
+                    exercise = Exercise.objects.get(id=exercise_id)
+                    WorkoutExercise.objects.create(
+                        workout=instance,
+                        exercise=exercise,
+                        order=exercise_data.get('order', i),
+                        sets=exercise_data.get('sets', 3),
+                        target_reps=exercise_data.get('target_reps', 12),
+                        rest_duration=exercise_data.get('rest_duration', 60),
+                        notes=exercise_data.get('notes', '')
+                    )
+                except Exercise.DoesNotExist:
+                    pass
+                    
+        return instance
 
 
 class SetRecordSerializer(serializers.ModelSerializer):
@@ -162,9 +209,9 @@ class WorkoutSessionSerializer(serializers.ModelSerializer):
         model = WorkoutSession
         fields = [
             'id', 'workout', 'workout_detail', 'start_time', 
-            'end_time', 'duration', 'calories_burned', 'notes', 'xp_earned'
+            'end_time', 'duration', 'calories_burned', 'notes', 'xp_earned', 'completed'
         ]
-        read_only_fields = ['start_time', 'end_time', 'duration', 'calories_burned', 'xp_earned']
+        read_only_fields = ['start_time', 'end_time', 'duration', 'calories_burned', 'xp_earned', 'completed']
 
 
 class WorkoutSessionDetailSerializer(serializers.ModelSerializer):
@@ -175,9 +222,9 @@ class WorkoutSessionDetailSerializer(serializers.ModelSerializer):
         model = WorkoutSession
         fields = [
             'id', 'workout', 'workout_detail', 'start_time', 'end_time', 
-            'duration', 'calories_burned', 'notes', 'xp_earned', 'exercise_records'
+            'duration', 'calories_burned', 'notes', 'xp_earned', 'completed', 'exercise_records'
         ]
-        read_only_fields = ['start_time', 'end_time', 'duration', 'calories_burned', 'xp_earned']
+        read_only_fields = ['start_time', 'end_time', 'duration', 'calories_burned', 'xp_earned', 'completed']
 
 
 class SupplementSerializer(serializers.ModelSerializer):
@@ -187,6 +234,7 @@ class SupplementSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'frequency', 'time_type',
             'time', 'minutes_before_workout', 'minutes_after_workout', 'days'
         ]
+        read_only_fields = ['user']
 
 
 class SupplementRecordSerializer(serializers.ModelSerializer):
@@ -201,7 +249,8 @@ class SupplementRecordSerializer(serializers.ModelSerializer):
 class AchievementSerializer(serializers.ModelSerializer):
     class Meta:
         model = Achievement
-        fields = ['id', 'name', 'description', 'xp_reward', 'icon_name']
+        fields = ['id', 'name', 'description', 'xp_reward', 'icon_name', 
+                 'requirement_type', 'requirement_value']
 
 
 class UserAchievementSerializer(serializers.ModelSerializer):
@@ -211,6 +260,22 @@ class UserAchievementSerializer(serializers.ModelSerializer):
         model = UserAchievement
         fields = ['id', 'achievement', 'achievement_detail', 'earned_date']
         read_only_fields = ['earned_date']
+
+
+class ChallengeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Challenge
+        fields = ['id', 'name', 'description', 'icon', 'start_date', 'end_date',
+                 'xp_reward', 'required_workouts', 'required_exercises', 'is_active']
+
+
+class UserChallengeSerializer(serializers.ModelSerializer):
+    challenge_detail = ChallengeSerializer(source='challenge', read_only=True)
+    
+    class Meta:
+        model = UserChallenge
+        fields = ['id', 'challenge', 'challenge_detail', 'joined_at', 'completed', 'completed_at']
+        read_only_fields = ['joined_at', 'completed_at']
 
 
 class NotificationSerializer(serializers.ModelSerializer):

@@ -1,4 +1,4 @@
-// src/contexts/AuthContext.jsx
+// frontend/src/contexts/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 
@@ -13,9 +13,9 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Definir base URL para todas as requisições
-  const apiBaseUrl = window.location.hostname === 'localhost' 
-    ? 'http://localhost:8550/api/v1' 
+  // Determinar baseURL com base no ambiente
+  const apiBaseUrl = window.location.hostname === 'localhost'
+    ? 'http://localhost:8550/api/v1'
     : '/api/v1';
 
   // Verificar autenticação quando o componente é montado
@@ -48,7 +48,6 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     
     try {
-      console.log("Tentando login em:", `${apiBaseUrl}/token/`);
       const response = await axios.post(`${apiBaseUrl}/token/`, { email, password });
       const { access, refresh } = response.data;
       
@@ -108,7 +107,8 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated,
         login,
         logout,
-        register
+        register,
+        apiBaseUrl
       }}
     >
       {children}

@@ -11,7 +11,7 @@ import {
   ArrowUpIcon,
   ArrowDownIcon
 } from '@heroicons/react/24/solid';
-import EnhancedWorkoutTimer from '../components/timer/EnhancedWorkoutTimer';
+import WorkoutTimer from '../components/timer/WorkoutTimer';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useToast } from '../contexts/ToastContext';
 import NavBar from '../components/common/NavBar';
@@ -273,7 +273,7 @@ const ActiveWorkout = () => {
                 </div>
                 
                 {/* Timer component */}
-                <EnhancedWorkoutTimer 
+                <WorkoutTimer 
                   exerciseName={currentExercise.exercise_detail?.name || currentExercise.name}
                   setNumber={currentSet}
                   totalSets={totalSets}
