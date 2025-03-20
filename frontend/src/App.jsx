@@ -1,24 +1,22 @@
+// src/App.jsx
 import React from 'react';
-import { BrowserRouter as Router } from 'react-router-dom';
-import AppRoutes from './routes';
-import { AuthProvider } from './contexts/AuthContext';
-import { WorkoutProvider } from './contexts/WorkoutContext';
-import { ToastProvider } from './contexts/ToastContext';
-import Toast from './components/common/Toast';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Home from './pages/Home';
+import NotFound from './pages/NotFound';
 
 function App() {
   return (
     <Router>
-      <AuthProvider>
-        <WorkoutProvider>
-          <ToastProvider>
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-              <AppRoutes />
-              <Toast />
-            </div>
-          </ToastProvider>
-        </WorkoutProvider>
-      </AuthProvider>
+      <div className="min-h-screen bg-gray-50">
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/" element={<Home />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </div>
     </Router>
   );
 }
