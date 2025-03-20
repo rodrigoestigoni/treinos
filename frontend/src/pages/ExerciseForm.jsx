@@ -1,7 +1,6 @@
-// src/pages/ExerciseForm.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeftIcon, PhotoIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, PhotoIcon, XCircleIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import NavBar from '../components/common/NavBar';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -18,6 +17,8 @@ const ExerciseForm = () => {
   const [submitting, setSubmitting] = useState(false);
   const [muscleGroups, setMuscleGroups] = useState([]);
   const [previewImage, setPreviewImage] = useState(null);
+  const [tags, setTags] = useState([]);
+  const [currentTag, setCurrentTag] = useState('');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -28,7 +29,8 @@ const ExerciseForm = () => {
     difficulty: 'intermediate',
     equipment_needed: '',
     image: null,
-    video_url: ''
+    video_url: '',
+    tags: []
   });
   
   // API base URL
@@ -62,8 +64,13 @@ const ExerciseForm = () => {
             difficulty: exercise.difficulty,
             equipment_needed: exercise.equipment_needed || '',
             image: null, // Can't prefill file input
-            video_url: exercise.video_url || ''
+            video_url: exercise.video_url || '',
+            tags: exercise.tags || []
           });
+          
+          if (exercise.tags) {
+            setTags(exercise.tags);
+          }
           
           if (exercise.image) {
             setPreviewImage(exercise.image);
@@ -138,6 +145,27 @@ const ExerciseForm = () => {
     }
   };
   
+  const addTag = () => {
+    if (currentTag.trim() !== '' && !tags.includes(currentTag.trim())) {
+      const newTags = [...tags, currentTag.trim()];
+      setTags(newTags);
+      setFormData(prev => ({
+        ...prev,
+        tags: newTags
+      }));
+      setCurrentTag('');
+    }
+  };
+  
+  const removeTag = (tagToRemove) => {
+    const newTags = tags.filter(tag => tag !== tagToRemove);
+    setTags(newTags);
+    setFormData(prev => ({
+      ...prev,
+      tags: newTags
+    }));
+  };
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -170,6 +198,11 @@ const ExerciseForm = () => {
       formData.muscle_group_ids.forEach(id => {
         data.append('muscle_group_ids', id);
       });
+      
+      // Add tags
+      if (formData.tags.length > 0) {
+        data.append('tags', JSON.stringify(formData.tags));
+      }
       
       // Add image if present
       if (formData.image) {
@@ -325,6 +358,49 @@ const ExerciseForm = () => {
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
                   placeholder="ex: https://youtube.com/watch?v=..."
                 />
+              </div>
+              
+              {/* Tags */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Tags
+                </label>
+                <div className="flex">
+                  <input
+                    type="text"
+                    value={currentTag}
+                    onChange={(e) => setCurrentTag(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                    className="flex-grow px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-l-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Adicionar tag..."
+                  />
+                  <button
+                    type="button"
+                    onClick={addTag}
+                    className="px-4 py-2 bg-primary-600 text-white rounded-r-lg hover:bg-primary-700"
+                  >
+                    <PlusIcon className="h-5 w-5" />
+                  </button>
+                </div>
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {tags.map((tag, index) => (
+                      <span
+                        key={index}
+                        className="inline-flex items-center px-2 py-1 rounded-full text-sm font-medium bg-primary-100 dark:bg-primary-800 text-primary-800 dark:text-primary-200"
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => removeTag(tag)}
+                          className="ml-1 text-primary-600 dark:text-primary-400 hover:text-primary-800 dark:hover:text-primary-200"
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             

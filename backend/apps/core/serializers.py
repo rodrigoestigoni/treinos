@@ -12,6 +12,7 @@ from .models import (
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
+    username = serializers.CharField(required=False, allow_blank=True)
     
     class Meta:
         model = User
@@ -22,6 +23,10 @@ class UserSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         password = validated_data.pop('password')
+        # Remove o username se estiver vazio
+        if 'username' in validated_data and not validated_data['username']:
+            del validated_data['username']
+        
         user = User(**validated_data)
         user.set_password(password)
         user.save()

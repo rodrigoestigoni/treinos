@@ -21,7 +21,19 @@ class User(AbstractUser):
     streak_last_date = models.DateField(null=True, blank=True)
     
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']
+    REQUIRED_FIELDS = []
+    
+    def save(self, *args, **kwargs):
+        # Ao criar um usuário, gerar automaticamente um username a partir do email se não for fornecido
+        if not self.username:
+            self.username = self.email.split('@')[0]
+            # Verificar se username já existe e adicionar número se necessário
+            base_username = self.username
+            count = 1
+            while User.objects.filter(username=self.username).exists():
+                self.username = f"{base_username}{count}"
+                count += 1
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return self.email

@@ -1,11 +1,12 @@
-// src/components/timer/WorkoutTimer.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   PlayIcon, 
   PauseIcon, 
   ForwardIcon, 
-  ArrowPathIcon 
+  ArrowPathIcon,
+  SpeakerWaveIcon,
+  SpeakerXMarkIcon
 } from '@heroicons/react/24/solid';
 
 const WorkoutTimer = ({ 
@@ -14,27 +15,50 @@ const WorkoutTimer = ({
   onComplete,
   exerciseName,
   setNumber,
-  totalSets
+  totalSets,
+  setMode,
+  mode,
+  playSound = true
 }) => {
-  const [mode, setMode] = useState('exercise'); // 'exercise', 'rest', or 'complete'
-  const [timeLeft, setTimeLeft] = useState(exerciseDuration > 0 ? exerciseDuration : 0);
+  const [timeLeft, setTimeLeft] = useState(mode === 'exercise' ? (exerciseDuration > 0 ? exerciseDuration : 0) : restDuration);
   const [isActive, setIsActive] = useState(false);
   const [progress, setProgress] = useState(100);
   const [showControls, setShowControls] = useState(true);
+  const [showCountdown, setShowCountdown] = useState(false);
+  const [isMuted, setIsMuted] = useState(!playSound);
+  const [countdownValue, setCountdownValue] = useState(3);
   
   const timerRef = useRef(null);
+  const countdownRef = useRef(null);
   const audioRef = useRef(null);
+  const tickSoundRef = useRef(null);
+  const finalTickSoundRef = useRef(null);
   const totalTime = mode === 'exercise' ? exerciseDuration : restDuration;
-
-  // Criar elemento de áudio para notificações
+  
+  // Criar elementos de áudio para notificações
   useEffect(() => {
-    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current = new Audio('/sounds/notification.mp3');
+    tickSoundRef.current = new Audio('/sounds/tick.mp3');
+    finalTickSoundRef.current = new Audio('/sounds/final-tick.mp3');
     
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, []);
-
+  
+  // Atualizar estado mudo quando a prop playSound mudar
+  useEffect(() => {
+    setIsMuted(!playSound);
+  }, [playSound]);
+  
+  useEffect(() => {
+    // Reiniciar timer quando o modo mudar
+    setTimeLeft(mode === 'exercise' ? (exerciseDuration > 0 ? exerciseDuration : 0) : restDuration);
+    setProgress(100);
+    setIsActive(false);
+  }, [mode, exerciseDuration, restDuration]);
+  
   useEffect(() => {
     if (isActive) {
       timerRef.current = setInterval(() => {
@@ -43,8 +67,13 @@ const WorkoutTimer = ({
             clearInterval(timerRef.current);
             
             // Tocar som de notificação
-            if (audioRef.current) {
-              audioRef.current.play().catch(e => console.log("Erro ao tocar audio:", e));
+            if (!isMuted && audioRef.current) {
+              audioRef.current.play().catch(e => console.log("Erro ao tocar áudio:", e));
+            }
+            
+            // Vibrar o dispositivo
+            if (navigator.vibrate) {
+              navigator.vibrate(200);
             }
             
             // Trocar modo ou finalizar
@@ -54,8 +83,6 @@ const WorkoutTimer = ({
               setProgress(100);
               return 0;
             } else {
-              setMode('complete');
-              setIsActive(false);
               if (onComplete) onComplete();
               return 0;
             }
@@ -64,9 +91,18 @@ const WorkoutTimer = ({
           const newTime = prevTime - 1;
           setProgress((newTime / totalTime) * 100);
           
-          // Tocar som nos últimos 3 segundos
-          if (newTime <= 3 && audioRef.current) {
-            audioRef.current.play().catch(e => console.log("Erro ao tocar audio:", e));
+          // Tocar sons nos últimos 3 segundos
+          if (newTime <= 3 && !isMuted) {
+            if (newTime === 0 && finalTickSoundRef.current) {
+              finalTickSoundRef.current.play().catch(e => console.log("Erro ao tocar áudio:", e));
+            } else if (tickSoundRef.current) {
+              tickSoundRef.current.play().catch(e => console.log("Erro ao tocar áudio:", e));
+            }
+            
+            // Vibrar o dispositivo a cada segundo nos últimos 3 segundos
+            if (navigator.vibrate) {
+              navigator.vibrate(100);
+            }
           }
           
           return newTime;
@@ -77,10 +113,31 @@ const WorkoutTimer = ({
     }
 
     return () => clearInterval(timerRef.current);
-  }, [isActive, mode, exerciseDuration, restDuration, totalTime, onComplete]);
-
+  }, [isActive, mode, exerciseDuration, restDuration, totalTime, onComplete, isMuted]);
+  
+  const startCountdown = () => {
+    setShowCountdown(true);
+    setCountdownValue(3);
+    
+    countdownRef.current = setInterval(() => {
+      setCountdownValue(prev => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current);
+          setShowCountdown(false);
+          setIsActive(true);
+          return 3;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+  
   const toggleTimer = () => {
-    setIsActive(!isActive);
+    if (!isActive) {
+      startCountdown();
+    } else {
+      setIsActive(false);
+    }
   };
 
   const resetTimer = () => {
@@ -97,11 +154,12 @@ const WorkoutTimer = ({
   const skipToRest = () => {
     if (mode === 'exercise') {
       clearInterval(timerRef.current);
-      setMode('rest');
-      setTimeLeft(restDuration);
-      setProgress(100);
-      setIsActive(false);
+      if (onComplete) onComplete();
     }
+  };
+  
+  const toggleMute = () => {
+    setIsMuted(!isMuted);
   };
 
   const formatTime = (seconds) => {
@@ -122,6 +180,8 @@ const WorkoutTimer = ({
     : mode === 'rest'
       ? 'text-green-600 dark:text-green-400'
       : 'text-orange-600 dark:text-orange-400';
+  
+  const pulseAnimation = timeLeft <= 3 ? 'animate-pulse' : '';
 
   return (
     <div className="w-full max-w-md mx-auto">
@@ -175,15 +235,29 @@ const WorkoutTimer = ({
               strokeDasharray="283"
               strokeDashoffset={283 - (283 * progress) / 100}
               transform="rotate(-90 50 50)"
+              className={pulseAnimation}
             />
           </svg>
           
           {/* Time display */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={`text-4xl font-bold ${textColor}`}>
-              {formatTime(timeLeft)}
-            </span>
-            {showControls && mode !== 'complete' && (
+            {showCountdown ? (
+              <motion.div
+                key="countdown"
+                initial={{ scale: 0.5, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 1.5, opacity: 0 }}
+                className={`text-5xl font-bold ${textColor}`}
+              >
+                {countdownValue}
+              </motion.div>
+            ) : (
+              <span className={`text-4xl font-bold ${textColor} ${pulseAnimation}`}>
+                {formatTime(timeLeft)}
+              </span>
+            )}
+            
+            {showControls && mode !== 'complete' && !showCountdown && (
               <div className="absolute bottom-16 flex space-x-4">
                 <motion.button
                   whileTap={{ scale: 0.9 }}
@@ -215,13 +289,25 @@ const WorkoutTimer = ({
                     <ForwardIcon className="h-6 w-6" />
                   </motion.button>
                 )}
+                
+                <motion.button
+                  whileTap={{ scale: 0.9 }}
+                  onClick={toggleMute}
+                  className="p-2 rounded-full bg-white dark:bg-gray-800 shadow-lg text-gray-700 dark:text-gray-300"
+                >
+                  {isMuted ? (
+                    <SpeakerXMarkIcon className="h-6 w-6" />
+                  ) : (
+                    <SpeakerWaveIcon className="h-6 w-6" />
+                  )}
+                </motion.button>
               </div>
             )}
           </div>
         </div>
 
         <div className="mt-6 flex flex-col space-y-4">
-          {mode === 'exercise' && !isActive && (
+          {mode === 'exercise' && !isActive && !showCountdown && (
             <button
               onClick={skipToRest}
               className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg flex items-center justify-center"
@@ -230,7 +316,7 @@ const WorkoutTimer = ({
             </button>
           )}
           
-          {mode === 'rest' && !isActive && (
+          {mode === 'rest' && !isActive && !showCountdown && (
             <button
               onClick={onComplete}
               className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg flex items-center justify-center"
@@ -239,12 +325,13 @@ const WorkoutTimer = ({
             </button>
           )}
           
-          {mode === 'complete' && (
+          {!isActive && !showCountdown && (
             <button
-              onClick={onComplete}
-              className="w-full py-3 px-4 bg-primary-600 hover:bg-primary-700 text-white font-medium rounded-lg flex items-center justify-center"
+              onClick={startCountdown}
+              className="w-full py-3 px-4 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-medium rounded-lg flex items-center justify-center"
             >
-              Continuar
+              <PlayIcon className="h-5 w-5 mr-2" />
+              Iniciar Timer
             </button>
           )}
         </div>

@@ -7,7 +7,7 @@ import { useToast } from '../contexts/ToastContext';
 import axios from 'axios';
 import { 
   ArrowLeftIcon, 
-  PencilIcon, 
+  PencilSquareIcon, 
   TrashIcon,
   PlayIcon,
   InformationCircleIcon,
@@ -231,7 +231,7 @@ const ExerciseDetail = () => {
                     to={`/exercises/edit/${exerciseId}`}
                     className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                   >
-                    <PencilIcon className="h-5 w-5" />
+                    <PencilSquareIcon className="h-5 w-5" />
                   </Link>
                   
                   <button

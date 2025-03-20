@@ -1,5 +1,4 @@
-// src/pages/ActiveWorkout.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -9,18 +8,22 @@ import {
   FireIcon,
   ClockIcon,
   ArrowUpIcon,
-  ArrowDownIcon
+  ArrowDownIcon,
+  SpeakerWaveIcon,
+  SpeakerXMarkIcon
 } from '@heroicons/react/24/solid';
 import WorkoutTimer from '../components/timer/WorkoutTimer';
 import { useWorkout } from '../contexts/WorkoutContext';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
 import NavBar from '../components/common/NavBar';
 
 const ActiveWorkout = () => {
   const { workoutId } = useParams();
   const navigate = useNavigate();
-  const { getWorkoutById, completeWorkout, updateExerciseProgress } = useWorkout();
+  const { getWorkoutById, startWorkout, completeWorkout, recordExerciseSet } = useWorkout();
   const { errorToast, successToast } = useToast();
+  const { user } = useAuth();
   
   const [workout, setWorkout] = useState(null);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -32,6 +35,25 @@ const ActiveWorkout = () => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [workoutStartTime, setWorkoutStartTime] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showExerciseInstructions, setShowExerciseInstructions] = useState(false);
+  const [sessionId, setSessionId] = useState(null);
+  const [weights, setWeights] = useState({});
+  const [previousWorkoutData, setPreviousWorkoutData] = useState(null);
+  
+  // References for sounds
+  const exerciseCompleteSound = useRef(null);
+  const restCompleteSound = useRef(null);
+  const countdownSound = useRef(null);
+  const workoutCompleteSound = useRef(null);
+  
+  // Vibration patterns
+  const vibrationPatterns = {
+    exerciseComplete: [200, 100, 200],
+    restComplete: [100, 50, 100, 50, 300],
+    countdown: [100],
+    workoutComplete: [300, 100, 300, 100, 500]
+  };
   
   // Timer for tracking total workout time
   useEffect(() => {
@@ -49,6 +71,28 @@ const ActiveWorkout = () => {
     return () => clearInterval(timer);
   }, [workoutStartTime]);
   
+  // Initialize sounds
+  useEffect(() => {
+    exerciseCompleteSound.current = new Audio('/sounds/exercise-complete.mp3');
+    restCompleteSound.current = new Audio('/sounds/rest-complete.mp3');
+    countdownSound.current = new Audio('/sounds/countdown.mp3');
+    workoutCompleteSound.current = new Audio('/sounds/workout-complete.mp3');
+    
+    // Preload sounds
+    exerciseCompleteSound.current.load();
+    restCompleteSound.current.load();
+    countdownSound.current.load();
+    workoutCompleteSound.current.load();
+    
+    return () => {
+      // Clean up sound references
+      exerciseCompleteSound.current = null;
+      restCompleteSound.current = null;
+      countdownSound.current = null;
+      workoutCompleteSound.current = null;
+    };
+  }, []);
+  
   // Format elapsed time
   const formatElapsedTime = () => {
     const hours = Math.floor(elapsedTime / 3600);
@@ -61,24 +105,69 @@ const ActiveWorkout = () => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
   
+  // Load workout data and start a new session
   useEffect(() => {
     const loadWorkout = async () => {
       try {
         setLoading(true);
+        
+        // Fetch workout details
         const data = await getWorkoutById(workoutId);
         setWorkout(data);
         
+        // Start new workout session
+        const session = await startWorkout(workoutId);
+        if (session && session.id) {
+          setSessionId(session.id);
+        }
+        
         // Initialize exercise progress
         const progress = {};
-        data.exercises.forEach(exercise => {
-          progress[exercise.id] = {
+        data.workout_exercises.forEach(exercise => {
+          progress[exercise.exercise_detail.id] = {
             sets: Array(exercise.sets).fill({
               completed: false,
-              actualReps: exercise.target_reps
+              actualReps: exercise.target_reps,
+              weight: 0
             })
           };
         });
         setExerciseProgress(progress);
+        
+        // Fetch previous workout data for this workout if available
+        // This would be implemented to show previous weights/reps
+        // TODO: Add API endpoint for this
+        
+        // For demo purposes, let's set some example previous workout data
+        const examplePreviousData = {
+          lastPerformed: "7 dias atrás",
+          exercises: {}
+        };
+        
+        data.workout_exercises.forEach(exercise => {
+          examplePreviousData.exercises[exercise.exercise_detail.id] = {
+            sets: Array(exercise.sets).fill({
+              reps: exercise.target_reps - 2,
+              weight: exercise.exercise_detail.name.includes("Flexão") ? 0 : 10
+            })
+          };
+        });
+        
+        setPreviousWorkoutData(examplePreviousData);
+        
+        // Initialize weights for each exercise
+        const initialWeights = {};
+        data.workout_exercises.forEach(exercise => {
+          // For bodyweight exercises, default to 0
+          const isBodyweight = exercise.exercise_detail.name.includes("Flexão") || 
+                             exercise.exercise_detail.name.includes("Prancha") ||
+                             exercise.exercise_detail.name.includes("Abdominal");
+                             
+          initialWeights[exercise.exercise_detail.id] = isBodyweight ? 0 : 10;
+        });
+        
+        setWeights(initialWeights);
+        
       } catch (error) {
         console.error('Error loading workout:', error);
         errorToast('Erro ao carregar treino');
@@ -88,7 +177,7 @@ const ActiveWorkout = () => {
     };
     
     loadWorkout();
-  }, [workoutId, getWorkoutById, errorToast]);
+  }, [workoutId, getWorkoutById, startWorkout, errorToast]);
   
   // Handle beforeunload event to warn user if they try to navigate away
   useEffect(() => {
@@ -105,6 +194,26 @@ const ActiveWorkout = () => {
     };
   }, []);
   
+  // Play sound with fallback
+  const playSound = (sound) => {
+    if (!soundEnabled || !sound.current) return;
+    
+    sound.current.play().catch(e => {
+      console.log("Erro ao tocar áudio:", e);
+    });
+  };
+  
+  // Vibrate with pattern
+  const vibrate = (pattern) => {
+    if (!navigator.vibrate) return;
+    navigator.vibrate(pattern);
+  };
+  
+  // Toggle sound on/off
+  const toggleSound = () => {
+    setSoundEnabled(!soundEnabled);
+  };
+  
   if (loading || !workout) {
     return (
       <>
@@ -116,38 +225,60 @@ const ActiveWorkout = () => {
     );
   }
   
-  const currentExercise = workout.exercises[currentExerciseIndex];
+  const currentExercise = workout.workout_exercises[currentExerciseIndex];
   const totalSets = currentExercise.sets;
   const currentSet = currentSetIndex + 1;
   const isLastSet = currentSet === totalSets;
-  const isLastExercise = currentExerciseIndex === workout.exercises.length - 1;
+  const isLastExercise = currentExerciseIndex === workout.workout_exercises.length - 1;
+  
+  // Get previous workout data for current exercise and set
+  const getPreviousSetData = () => {
+    if (!previousWorkoutData) return null;
+    
+    const exerciseId = currentExercise.exercise_detail.id;
+    if (!previousWorkoutData.exercises[exerciseId]) return null;
+    
+    // Get data for current set or the last set if current set index is out of bounds
+    const prevSetIndex = Math.min(currentSetIndex, previousWorkoutData.exercises[exerciseId].sets.length - 1);
+    return previousWorkoutData.exercises[exerciseId].sets[prevSetIndex];
+  };
+  
+  const previousSetData = getPreviousSetData();
   
   const handleExerciseComplete = () => {
-    // Play success sound
-    const audio = new Audio('/exercise-complete.mp3');
-    audio.play().catch(e => console.log("Erro ao tocar audio:", e));
+    // Play sound and vibrate
+    playSound(exerciseCompleteSound);
+    vibrate(vibrationPatterns.exerciseComplete);
     
     setIsResting(true);
   };
   
   const handleRestComplete = () => {
+    // Play sound and vibrate
+    playSound(restCompleteSound);
+    vibrate(vibrationPatterns.restComplete);
+    
     setIsResting(false);
     
     // Update progress for this set
     const updatedProgress = { ...exerciseProgress };
-    updatedProgress[currentExercise.id].sets[currentSetIndex] = {
+    updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex] = {
       completed: true,
-      actualReps: updatedProgress[currentExercise.id].sets[currentSetIndex].actualReps
+      actualReps: updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].actualReps,
+      weight: weights[currentExercise.exercise_detail.id] || 0
     };
     setExerciseProgress(updatedProgress);
     
     // Save progress to API
-    updateExerciseProgress(
-      workoutId, 
-      currentExercise.id, 
-      currentSetIndex + 1, // API expects 1-indexed set numbers
-      updatedProgress[currentExercise.id].sets[currentSetIndex].actualReps
-    );
+    if (sessionId) {
+      recordExerciseSet(
+        sessionId, 
+        currentExercise.exercise_detail.id, 
+        currentSetIndex + 1, // API expects 1-indexed set numbers
+        updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].actualReps,
+        weights[currentExercise.exercise_detail.id]
+      );
+    }
     
     // Show success toast
     successToast(`Série ${currentSet} concluída!`);
@@ -156,6 +287,8 @@ const ActiveWorkout = () => {
     if (isLastSet) {
       if (isLastExercise) {
         // Workout complete
+        playSound(workoutCompleteSound);
+        vibrate(vibrationPatterns.workoutComplete);
         setShowCompletionDialog(true);
       } else {
         // Next exercise
@@ -170,16 +303,25 @@ const ActiveWorkout = () => {
   
   const handleUpdateReps = (exercise, setIndex, newValue) => {
     const updatedProgress = { ...exerciseProgress };
-    updatedProgress[exercise.id].sets[setIndex] = {
-      ...updatedProgress[exercise.id].sets[setIndex],
+    updatedProgress[exercise.exercise_detail.id].sets[setIndex] = {
+      ...updatedProgress[exercise.exercise_detail.id].sets[setIndex],
       actualReps: newValue
     };
     setExerciseProgress(updatedProgress);
   };
   
+  const handleUpdateWeight = (exerciseId, newValue) => {
+    setWeights({
+      ...weights,
+      [exerciseId]: newValue
+    });
+  };
+  
   const handleCompletionConfirm = async () => {
     try {
-      await completeWorkout(workoutId);
+      if (sessionId) {
+        await completeWorkout(sessionId);
+      }
       
       // Navigate to summary
       navigate('/workouts/summary', { 
@@ -226,9 +368,20 @@ const ActiveWorkout = () => {
               </div>
             </div>
             
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={toggleSound}
+                className="p-2 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {soundEnabled ? (
+                  <SpeakerWaveIcon className="h-5 w-5" />
+                ) : (
+                  <SpeakerXMarkIcon className="h-5 w-5" />
+                )}
+              </button>
+              
               <span className="px-3 py-1 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 rounded-full text-sm font-medium">
-                {currentExerciseIndex + 1}/{workout.exercises.length}
+                {currentExerciseIndex + 1}/{workout.workout_exercises.length}
               </span>
             </div>
           </div>
@@ -239,7 +392,7 @@ const ActiveWorkout = () => {
               className="h-full bg-primary-600"
               style={{ 
                 width: `${(((currentExerciseIndex * totalSets) + currentSetIndex) / 
-                      (workout.exercises.length * totalSets)) * 100}%` 
+                      (workout.workout_exercises.reduce((total, ex) => total + ex.sets, 0))) * 100}%` 
               }}
             ></div>
           </div>
@@ -259,67 +412,139 @@ const ActiveWorkout = () => {
               >
                 <div className="flex justify-between items-start mb-6">
                   <div>
-                    <h2 className="text-xl font-semibold">{currentExercise.exercise_detail?.name || currentExercise.name}</h2>
+                    <h2 className="text-xl font-semibold">{currentExercise.exercise_detail?.name}</h2>
                     <p className="text-gray-600 dark:text-gray-400">
                       {isResting ? 'Descansando' : `Série ${currentSet} de ${totalSets}`}
                     </p>
+                    
+                    {!isResting && previousSetData && (
+                      <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        <span>Último treino: {previousSetData.reps} repetições 
+                        {previousSetData.weight > 0 ? ` com ${previousSetData.weight}kg` : ''}</span>
+                      </div>
+                    )}
                   </div>
                   
                   {!isResting && (
-                    <div className="px-3 py-1 bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200 rounded-full">
-                      {currentExercise.target_reps} reps
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowExerciseInstructions(!showExerciseInstructions)}
+                        className="px-3 py-1 text-xs font-medium rounded-full bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200"
+                      >
+                        {showExerciseInstructions ? 'Ocultar' : 'Ver'} instruções
+                      </button>
                     </div>
                   )}
                 </div>
                 
+                {/* Instructions accordion */}
+                <AnimatePresence>
+                  {showExerciseInstructions && !isResting && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="mb-6 overflow-hidden"
+                    >
+                      <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm">
+                        <p className="text-gray-700 dark:text-gray-300">{currentExercise.exercise_detail.instructions}</p>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                
                 {/* Timer component */}
                 <WorkoutTimer 
-                  exerciseName={currentExercise.exercise_detail?.name || currentExercise.name}
+                  exerciseName={currentExercise.exercise_detail?.name}
                   setNumber={currentSet}
                   totalSets={totalSets}
                   mode={isResting ? 'rest' : 'exercise'}
-                  exerciseDuration={0} // Using manual completion mode
+                  exerciseDuration={0}
                   restDuration={currentExercise.rest_duration || 60}
                   onComplete={isResting ? handleRestComplete : handleExerciseComplete}
+                  playSound={soundEnabled}
                 />
                 
                 {!isResting && (
                   <div className="mt-6">
-                    <h3 className="text-lg font-medium mb-2">Repetições realizadas</h3>
-                    <div className="flex items-center justify-center">
-                      <button
-                        onClick={() => handleUpdateReps(
-                          currentExercise, 
-                          currentSetIndex, 
-                          Math.max(0, exerciseProgress[currentExercise.id].sets[currentSetIndex].actualReps - 1)
-                        )}
-                        className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                      >
-                        <ArrowDownIcon className="h-5 w-5" />
-                      </button>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h3 className="text-lg font-medium mb-2">Repetições</h3>
+                        <div className="flex items-center justify-center">
+                          <button
+                            onClick={() => handleUpdateReps(
+                              currentExercise, 
+                              currentSetIndex, 
+                              Math.max(0, exerciseProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].actualReps - 1)
+                            )}
+                            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                          >
+                            <ArrowDownIcon className="h-5 w-5" />
+                          </button>
+                          
+                          <input
+                            type="number"
+                            min="0"
+                            value={exerciseProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].actualReps}
+                            onChange={(e) => handleUpdateReps(
+                              currentExercise, 
+                              currentSetIndex, 
+                              parseInt(e.target.value) || 0
+                            )}
+                            className="w-20 mx-4 text-center text-3xl font-bold p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          />
+                          
+                          <button
+                            onClick={() => handleUpdateReps(
+                              currentExercise, 
+                              currentSetIndex, 
+                              exerciseProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].actualReps + 1
+                            )}
+                            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                          >
+                            <ArrowUpIcon className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </div>
                       
-                      <input
-                        type="number"
-                        min="0"
-                        value={exerciseProgress[currentExercise.id].sets[currentSetIndex].actualReps}
-                        onChange={(e) => handleUpdateReps(
-                          currentExercise, 
-                          currentSetIndex, 
-                          parseInt(e.target.value) || 0
-                        )}
-                        className="w-20 mx-4 text-center text-3xl font-bold p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                      />
-                      
-                      <button
-                        onClick={() => handleUpdateReps(
-                          currentExercise, 
-                          currentSetIndex, 
-                          exerciseProgress[currentExercise.id].sets[currentSetIndex].actualReps + 1
-                        )}
-                        className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
-                      >
-                        <ArrowUpIcon className="h-5 w-5" />
-                      </button>
+                      <div>
+                        <h3 className="text-lg font-medium mb-2">Peso (kg)</h3>
+                        <div className="flex items-center justify-center">
+                          <button
+                            onClick={() => handleUpdateWeight(
+                              currentExercise.exercise_detail.id, 
+                              Math.max(0, (weights[currentExercise.exercise_detail.id] || 0) - 2.5)
+                            )}
+                            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                          >
+                            <ArrowDownIcon className="h-5 w-5" />
+                          </button>
+                          
+                          <input
+                            type="number"
+                            min="0"
+                            step="2.5"
+                            value={weights[currentExercise.exercise_detail.id] || 0}
+                            onChange={(e) => handleUpdateWeight(
+                              currentExercise.exercise_detail.id, 
+                              parseFloat(e.target.value) || 0
+                            )}
+                            className="w-20 mx-4 text-center text-3xl font-bold p-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                          />
+                          
+                          <button
+                            onClick={() => handleUpdateWeight(
+                              currentExercise.exercise_detail.id, 
+                              (weights[currentExercise.exercise_detail.id] || 0) + 2.5
+                            )}
+                            className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300"
+                          >
+                            <ArrowUpIcon className="h-5 w-5" />
+                          </button>
+                        </div>
+                      </div>
                     </div>
                     
                     <button
@@ -331,13 +556,6 @@ const ActiveWorkout = () => {
                     </button>
                   </div>
                 )}
-                
-                {currentExercise.instructions && !isResting && (
-                  <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <h3 className="font-medium mb-2">Instruções:</h3>
-                    <p className="text-gray-600 dark:text-gray-400">{currentExercise.instructions}</p>
-                  </div>
-                )}
               </motion.div>
             </AnimatePresence>
             
@@ -345,9 +563,9 @@ const ActiveWorkout = () => {
             <div className="mb-8">
               <h3 className="text-lg font-semibold mb-3">Próximos exercícios</h3>
               <div className="space-y-3">
-                {workout.exercises.slice(currentExerciseIndex + 1, currentExerciseIndex + 4).map((exercise, idx) => (
+                {workout.workout_exercises.slice(currentExerciseIndex + 1, currentExerciseIndex + 4).map((exercise, idx) => (
                   <div 
-                    key={exercise.id || idx} 
+                    key={idx} 
                     className="flex items-center bg-white dark:bg-gray-800 p-3 rounded-lg shadow-sm"
                   >
                     <div className="bg-gray-200 dark:bg-gray-700 rounded-full w-8 h-8 flex items-center justify-center mr-3">
@@ -356,7 +574,7 @@ const ActiveWorkout = () => {
                       </span>
                     </div>
                     <div>
-                      <h4 className="font-medium">{exercise.exercise_detail?.name || exercise.name}</h4>
+                      <h4 className="font-medium">{exercise.exercise_detail?.name}</h4>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {exercise.sets} x {exercise.target_reps} repetições
                       </p>
@@ -364,7 +582,7 @@ const ActiveWorkout = () => {
                   </div>
                 ))}
                 
-                {workout.exercises.slice(currentExerciseIndex + 1).length === 0 && (
+                {workout.workout_exercises.slice(currentExerciseIndex + 1).length === 0 && (
                   <p className="text-gray-600 dark:text-gray-400 text-center py-3">
                     Este é o último exercício do treino!
                   </p>
@@ -400,7 +618,7 @@ const ActiveWorkout = () => {
                   </div>
                   <div className="flex justify-between">
                     <span>Exercícios concluídos:</span>
-                    <span className="font-semibold">{workout.exercises.length}/{workout.exercises.length}</span>
+                    <span className="font-semibold">{workout.workout_exercises.length}/{workout.workout_exercises.length}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>XP ganho:</span>

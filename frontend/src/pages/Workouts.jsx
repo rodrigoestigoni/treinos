@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import NavBar from '../components/common/NavBar';
 import { useWorkout } from '../contexts/WorkoutContext';
-import { ClockIcon, PlayIcon, PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, PlayIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 const Workouts = () => {
   const { workouts, fetchWorkouts, deleteWorkout, loading } = useWorkout();
@@ -40,7 +40,7 @@ const Workouts = () => {
                 className="text-gray-500 hover:text-primary-600 p-1"
                 onClick={(e) => e.stopPropagation()}
               >
-                <PencilIcon className="h-5 w-5" />
+                <PencilSquareIcon className="h-5 w-5" />
               </Link>
               <button
                 onClick={(e) => handleDeleteWorkout(workout.id, e)}
