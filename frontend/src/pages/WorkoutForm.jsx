@@ -47,7 +47,6 @@ const WorkoutForm = () => {
   // Exercise form state (for adding/editing workout exercises)
   const [exerciseForm, setExerciseForm] = useState({
     exercise_id: '',
-    exercise_detail: null,
     sets: 3,
     target_reps: 12,
     rest_duration: 60,
@@ -182,15 +181,13 @@ const WorkoutForm = () => {
     }));
   };
   
-  // CORRIGIDO: Agora imediatamente configura o exerciseForm com detalhes e passa para 
-  // a etapa de configuração de séries/repetições
+  // Este é o método corrigido que deve mostrar imediatamente o formulário do exercício
   const addExercise = (exerciseId) => {
     const exercise = exercises.find(ex => ex.id === exerciseId);
     
     if (exercise) {
       setExerciseForm({
         exercise_id: exercise.id,
-        exercise_detail: exercise,
         sets: 3,
         target_reps: 12,
         rest_duration: 60,
@@ -199,7 +196,7 @@ const WorkoutForm = () => {
         superset_with: []
       });
       
-      // Fechar o seletor de exercícios e não resetar o formulário
+      // Isso deve acontecer imediatamente:
       setShowExerciseSelector(false);
       setEditingExerciseIndex(null);
     }
@@ -211,15 +208,13 @@ const WorkoutForm = () => {
       return;
     }
     
-    // O exercício já está no exerciseForm agora
-    const exercise = exerciseForm.exercise_detail || exercises.find(ex => ex.id === exerciseForm.exercise_id);
+    const exercise = exercises.find(ex => ex.id === exerciseForm.exercise_id);
     
     if (!exercise) {
       errorToast('Exercício não encontrado');
       return;
     }
     
-    // Usar os detalhes já disponíveis
     const newExercise = {
       ...exerciseForm,
       exercise_detail: exercise
@@ -247,7 +242,6 @@ const WorkoutForm = () => {
     // Reset exercise form
     setExerciseForm({
       exercise_id: '',
-      exercise_detail: null,
       sets: 3,
       target_reps: 12,
       rest_duration: 60,
@@ -264,7 +258,6 @@ const WorkoutForm = () => {
     
     setExerciseForm({
       exercise_id: exerciseToEdit.exercise_id,
-      exercise_detail: exerciseToEdit.exercise_detail,
       sets: exerciseToEdit.sets,
       target_reps: exerciseToEdit.target_reps,
       rest_duration: exerciseToEdit.rest_duration,
@@ -498,7 +491,6 @@ const WorkoutForm = () => {
                   setEditingExerciseIndex(null);
                   setExerciseForm({
                     exercise_id: '',
-                    exercise_detail: null,
                     sets: 3,
                     target_reps: 12,
                     rest_duration: 60,
@@ -651,30 +643,11 @@ const WorkoutForm = () => {
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">
-                  {exerciseForm.exercise_id 
-                    ? 'Configurar Exercício' 
-                    : (editingExerciseIndex !== null 
-                        ? 'Editar Exercício' 
-                        : 'Adicionar Exercício ao Treino')}
+                  {exerciseForm.exercise_id ? 'Configurar Exercício' : 'Adicionar Exercício ao Treino'}
                 </h3>
                 <button
                   type="button"
-                  onClick={() => {
-                    setShowExerciseSelector(false);
-                    // Apenas limpar se não estiver configurando um exercício
-                    if (!exerciseForm.exercise_id) {
-                      setExerciseForm({
-                        exercise_id: '',
-                        exercise_detail: null,
-                        sets: 3,
-                        target_reps: 12,
-                        rest_duration: 60,
-                        notes: '',
-                        is_superset: false,
-                        superset_with: []
-                      });
-                    }
-                  }}
+                  onClick={() => setShowExerciseSelector(false)}
                   className="text-gray-500 hover:text-gray-700"
                 >
                   <XMarkIcon className="h-6 w-6" />
@@ -686,10 +659,10 @@ const WorkoutForm = () => {
                 <div className="space-y-4">
                   <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
                     <h4 className="font-medium text-lg mb-1">
-                      {exerciseForm.exercise_detail?.name || ''}
+                      {exercises.find(ex => ex.id === exerciseForm.exercise_id)?.name}
                     </h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {exerciseForm.exercise_detail?.description || ''}
+                      {exercises.find(ex => ex.id === exerciseForm.exercise_id)?.description}
                     </p>
                   </div>
                   
@@ -806,10 +779,8 @@ const WorkoutForm = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        // Voltar para seleção de exercícios
                         setExerciseForm({
                           exercise_id: '',
-                          exercise_detail: null,
                           sets: 3,
                           target_reps: 12,
                           rest_duration: 60,
@@ -863,10 +834,23 @@ const WorkoutForm = () => {
                     {filteredExercises.length > 0 ? (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {filteredExercises.map(exercise => (
-                          <div
+                          <button
                             key={exercise.id}
-                            onClick={() => addExercise(exercise.id)}
-                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                            onClick={() => {
+                              // Alterado para adicionar exercício e mostrar imediatamente o formulário
+                              const newExerciseForm = {
+                                exercise_id: exercise.id,
+                                sets: 3,
+                                target_reps: 12,
+                                rest_duration: 60,
+                                notes: '',
+                                is_superset: false,
+                                superset_with: []
+                              };
+                              setExerciseForm(newExerciseForm);
+                            }}
+                            type="button"
+                            className="text-left border border-gray-200 dark:border-gray-700 rounded-lg p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
                           >
                             <h4 className="font-medium">{exercise.name}</h4>
                             <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mt-1">
@@ -882,7 +866,7 @@ const WorkoutForm = () => {
                                 </span>
                               ))}
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     ) : (
