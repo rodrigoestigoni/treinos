@@ -19,7 +19,6 @@ services:
     environment:
       - NODE_ENV=development
       - VITE_API_URL=http://localhost:8000/api/v1
-    command: npm run dev
     container_name: treinos_frontend
     networks:
       - app_net
@@ -44,7 +43,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_HOST=db
-      - DB_PORT=5434
+      - DB_PORT=5432
       - REDIS_HOST=redis
       - REDIS_PORT=6381
       - ALLOWED_HOSTS=localhost,127.0.0.1,backend
@@ -86,9 +85,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A califit worker -l INFO
+    entrypoint: /celery-entrypoint.sh
     volumes:
       - ./backend:/app
+      - ./backend/celery-entrypoint.sh:/celery-entrypoint.sh
     depends_on:
       - backend
       - redis
@@ -99,7 +99,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_HOST=db
-      - DB_PORT=5434
+      - DB_PORT=5432
       - REDIS_HOST=redis
       - REDIS_PORT=6381
     networks:
@@ -110,9 +110,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A califit beat -l INFO
+    entrypoint: /celery-beat-entrypoint.sh
     volumes:
       - ./backend:/app
+      - ./backend/celery-beat-entrypoint.sh:/celery-beat-entrypoint.sh
     depends_on:
       - backend
       - redis
@@ -123,7 +124,7 @@ services:
       - DB_USER=postgres
       - DB_PASSWORD=postgres
       - DB_HOST=db
-      - DB_PORT=5434
+      - DB_PORT=5432
       - REDIS_HOST=redis
       - REDIS_PORT=6381
     networks:

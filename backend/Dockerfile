@@ -9,9 +9,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gettext \
     libpq-dev \
     gcc \
+    postgresql-client \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
 
 WORKDIR /app
 
@@ -22,12 +22,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copiar código-fonte
 COPY . .
 
+# Adicionar script de entrada e torná-lo executável
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 # Expor porta
 EXPOSE 8000
 
-RUN python manage.py makemigrations
-RUN python manage.py migrate
-RUN python manage.py collectstatic
-
-# Comando para executar o servidor
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "califit.wsgi:application"]
+# Comando para executar o script de entrada
+ENTRYPOINT ["/entrypoint.sh"]
