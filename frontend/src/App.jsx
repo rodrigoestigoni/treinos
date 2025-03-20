@@ -1,22 +1,32 @@
 // src/App.jsx
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Home from './pages/Home';
-import NotFound from './pages/NotFound';
+import { BrowserRouter as Router } from 'react-router-dom';
+import AppRoutes from './routes';
+import { AuthProvider } from './contexts/AuthContext';
+import { WorkoutProvider } from './contexts/WorkoutContext';
+import { ToastProvider } from './contexts/ToastContext';
+import Toast from './components/common/Toast';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 function App() {
+  // Configurar o URL base do axios para toda a aplicação
+  const apiUrl = process.env.REACT_APP_API_URL || '/api/v1';
+  console.log("API URL:", apiUrl);
+
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/" element={<Home />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </div>
+      <ErrorBoundary>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+          <AuthProvider>
+            <ToastProvider>
+              <WorkoutProvider>
+                <AppRoutes />
+                <Toast />
+              </WorkoutProvider>
+            </ToastProvider>
+          </AuthProvider>
+        </div>
+      </ErrorBoundary>
     </Router>
   );
 }

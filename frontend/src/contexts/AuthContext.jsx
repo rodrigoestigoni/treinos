@@ -1,6 +1,6 @@
 // src/contexts/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import api from '../services/api';
+import axios from 'axios';
 
 const AuthContext = createContext();
 
@@ -13,6 +13,11 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+  // Definir base URL para todas as requisições
+  const apiBaseUrl = window.location.hostname === 'localhost' 
+    ? 'http://localhost:8550/api/v1' 
+    : '/api/v1';
+
   // Verificar autenticação quando o componente é montado
   useEffect(() => {
     const checkAuth = async () => {
@@ -22,7 +27,9 @@ export const AuthProvider = ({ children }) => {
       }
 
       try {
-        const response = await api.get('/users/me/');
+        const response = await axios.get(`${apiBaseUrl}/users/me/`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         setUser(response.data);
         setIsAuthenticated(true);
       } catch (err) {
@@ -34,14 +41,15 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkAuth();
-  }, [token]);
+  }, [token, apiBaseUrl]);
 
   const login = async (email, password) => {
     setLoading(true);
     setError(null);
     
     try {
-      const response = await api.post('/token/', { email, password });
+      console.log("Tentando login em:", `${apiBaseUrl}/token/`);
+      const response = await axios.post(`${apiBaseUrl}/token/`, { email, password });
       const { access, refresh } = response.data;
       
       // Salvar tokens
@@ -50,7 +58,7 @@ export const AuthProvider = ({ children }) => {
       setToken(access);
       
       // Buscar dados do usuário
-      const userResponse = await api.get('/users/me/', {
+      const userResponse = await axios.get(`${apiBaseUrl}/users/me/`, {
         headers: { Authorization: `Bearer ${access}` }
       });
       
@@ -79,7 +87,7 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     
     try {
-      await api.post('/users/', userData);
+      await axios.post(`${apiBaseUrl}/users/`, userData);
       return true;
     } catch (err) {
       console.error('Erro ao registrar:', err);

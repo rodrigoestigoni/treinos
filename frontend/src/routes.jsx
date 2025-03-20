@@ -3,13 +3,13 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 
-// Importe os componentes diretamente em vez de usar lazy loading inicialmente
-// para depuração dos problemas de rota
+// Importe os componentes diretamente
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Home from './pages/Home';
 import Workouts from './pages/Workouts';
 import WorkoutDetail from './pages/WorkoutDetail';
+import WorkoutForm from './pages/WorkoutForm';
 import ActiveWorkout from './pages/ActiveWorkout';
 import WorkoutSummary from './pages/WorkoutSummary';
 import Progress from './pages/Progress';
@@ -56,11 +56,12 @@ const AppRoutes = () => {
           </PrivateRoute>
         } 
       />
+      {/* Importante: essa rota deve vir antes das rotas com estruturas similares */}
       <Route 
-        path="/workouts/:workoutId" 
+        path="/workouts/create" 
         element={
           <PrivateRoute>
-            <WorkoutDetail />
+            <WorkoutForm />
           </PrivateRoute>
         } 
       />
@@ -77,6 +78,14 @@ const AppRoutes = () => {
         element={
           <PrivateRoute>
             <WorkoutSummary />
+          </PrivateRoute>
+        } 
+      />
+      <Route 
+        path="/workouts/:workoutId" 
+        element={
+          <PrivateRoute>
+            <WorkoutDetail />
           </PrivateRoute>
         } 
       />

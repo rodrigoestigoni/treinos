@@ -25,7 +25,8 @@ services:
   backend:
     build: ./backend
     volumes:
-      - ./backend:/app
+      - ./backend/apps:/app/apps
+      - ./backend/califit:/app/califit
       - /etc/letsencrypt:/etc/letsencrypt:ro
     ports:
       - "8550:8000"

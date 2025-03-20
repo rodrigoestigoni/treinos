@@ -11,17 +11,48 @@ const WorkoutDetail = () => {
   const { getWorkoutById, startWorkout, loading } = useWorkout();
   const { errorToast } = useToast();
   const [workout, setWorkout] = useState(null);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempted, setLoadAttempted] = useState(false);
   
   useEffect(() => {
+    // Evitar loop infinito verificando se o workoutId é válido
+    if (!workoutId) {
+      setLoadError(true);
+      return;
+    }
+    
+    // Evitar múltiplas requisições
+    if (loadAttempted) return;
+    
+    let isMounted = true;
     const fetchWorkout = async () => {
-      const data = await getWorkoutById(workoutId);
-      if (data) {
-        setWorkout(data);
+      try {
+        setLoadAttempted(true);
+        console.log("Fetching workout with ID:", workoutId);
+        const data = await getWorkoutById(workoutId);
+        if (data && isMounted) {
+          console.log("Workout data received:", data);
+          setWorkout(data);
+        } else if (isMounted) {
+          setLoadError(true);
+          errorToast('Não foi possível carregar os detalhes do treino');
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.error('Erro ao carregar treino:', error);
+          setLoadError(true);
+          errorToast('Erro ao carregar treino. Tente novamente mais tarde.');
+        }
       }
     };
     
     fetchWorkout();
-  }, [workoutId, getWorkoutById]);
+    
+    // Limpeza para evitar vazamentos de memória
+    return () => {
+      isMounted = false;
+    };
+  }, [workoutId, getWorkoutById, errorToast, loadAttempted]);
   
   const handleStartWorkout = async () => {
     try {
@@ -34,6 +65,27 @@ const WorkoutDetail = () => {
       console.error(error);
     }
   };
+  
+  if (loadError) {
+    return (
+      <>
+        <NavBar />
+        <div className="container mx-auto px-4 py-8 md:py-12 md:pl-72">
+          <div className="text-center">
+            <h2 className="text-xl font-bold mb-4">Treino não encontrado</h2>
+            <p className="mb-4">O treino que você está procurando não existe ou foi removido.</p>
+            <Link 
+              to="/workouts" 
+              className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg"
+            >
+              <ArrowLeftIcon className="h-4 w-4 mr-2" />
+              Voltar para Treinos
+            </Link>
+          </div>
+        </div>
+      </>
+    );
+  }
   
   if (loading || !workout) {
     return (
@@ -95,7 +147,7 @@ const WorkoutDetail = () => {
           <div className="space-y-4">
             {workout.exercises?.map((exercise, index) => (
               <div 
-                key={exercise.id}
+                key={index}
                 className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
               >
                 <div className="flex justify-between">
