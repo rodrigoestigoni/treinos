@@ -1,20 +1,29 @@
-// src/routes.jsx
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 
-// Importe os componentes diretamente
+// Páginas públicas
 import Login from './pages/Login';
 import Register from './pages/Register';
+import NotFound from './pages/NotFound';
+
+// Páginas protegidas
 import Home from './pages/Home';
+import Profile from './pages/Profile';
+import Progress from './pages/Progress';
+
+// Treinos
 import Workouts from './pages/Workouts';
 import WorkoutDetail from './pages/WorkoutDetail';
 import WorkoutForm from './pages/WorkoutForm';
 import ActiveWorkout from './pages/ActiveWorkout';
 import WorkoutSummary from './pages/WorkoutSummary';
-import Progress from './pages/Progress';
-import Profile from './pages/Profile';
-import NotFound from './pages/NotFound';
+
+// Exercícios
+import Exercises from './pages/Exercises';
+import ExerciseDetail from './pages/ExerciseDetail';
+import ExerciseForm from './pages/ExerciseForm';
+import MuscleGroups from './pages/MuscleGroups';
 
 // Wrapper de página privada
 const PrivateRoute = ({ children }) => {
@@ -48,6 +57,52 @@ const AppRoutes = () => {
           </PrivateRoute>
         } 
       />
+      
+      {/* Rotas de exercícios */}
+      <Route 
+        path="/exercises" 
+        element={
+          <PrivateRoute>
+            <Exercises />
+          </PrivateRoute>
+        } 
+      />
+      <Route 
+        path="/exercises/create" 
+        element={
+          <PrivateRoute>
+            <ExerciseForm />
+          </PrivateRoute>
+        } 
+      />
+      <Route 
+        path="/exercises/:exerciseId" 
+        element={
+          <PrivateRoute>
+            <ExerciseDetail />
+          </PrivateRoute>
+        } 
+      />
+      <Route 
+        path="/exercises/edit/:exerciseId" 
+        element={
+          <PrivateRoute>
+            <ExerciseForm />
+          </PrivateRoute>
+        } 
+      />
+      
+      {/* Rota para gerenciar grupos musculares */}
+      <Route 
+        path="/muscle-groups" 
+        element={
+          <PrivateRoute>
+            <MuscleGroups />
+          </PrivateRoute>
+        } 
+      />
+      
+      {/* Rotas de treinos */}
       <Route 
         path="/workouts" 
         element={
@@ -56,9 +111,16 @@ const AppRoutes = () => {
           </PrivateRoute>
         } 
       />
-      {/* Importante: essa rota deve vir antes das rotas com estruturas similares */}
       <Route 
         path="/workouts/create" 
+        element={
+          <PrivateRoute>
+            <WorkoutForm />
+          </PrivateRoute>
+        } 
+      />
+      <Route 
+        path="/workouts/edit/:workoutId" 
         element={
           <PrivateRoute>
             <WorkoutForm />
@@ -89,6 +151,8 @@ const AppRoutes = () => {
           </PrivateRoute>
         } 
       />
+      
+      {/* Outras rotas */}
       <Route 
         path="/progress" 
         element={

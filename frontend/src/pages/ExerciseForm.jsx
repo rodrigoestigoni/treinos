@@ -406,28 +406,39 @@ const ExerciseForm = () => {
             
             {/* Right column */}
             <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              {/* Grupos Musculares - Made more prominent */}
+              <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg border border-primary-100 dark:border-primary-800">
+                <label className="block text-lg font-medium text-primary-800 dark:text-primary-300 mb-3">
                   Grupos musculares trabalhados *
                 </label>
                 
                 <div className="grid grid-cols-2 gap-3">
-                  {muscleGroups.map(group => (
-                    <div key={group.id} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        id={`group-${group.id}`}
-                        name={`group-${group.id}`}
-                        checked={formData.muscle_group_ids.includes(group.id)}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor={`group-${group.id}`} className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                        {group.name}
-                      </label>
-                    </div>
-                  ))}
+                  {muscleGroups.length > 0 ? (
+                    muscleGroups.map(group => (
+                      <div key={group.id} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id={`group-${group.id}`}
+                          name={`group-${group.id}`}
+                          checked={formData.muscle_group_ids.includes(group.id)}
+                          onChange={handleChange}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor={`group-${group.id}`} className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                          {group.name}
+                        </label>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-red-500 col-span-2">
+                      Nenhum grupo muscular disponível. Verifique a conexão com o servidor.
+                    </p>
+                  )}
                 </div>
+                
+                <p className="mt-2 text-sm text-primary-700 dark:text-primary-400">
+                  Selecione pelo menos um grupo muscular para este exercício.
+                </p>
               </div>
               
               <div>

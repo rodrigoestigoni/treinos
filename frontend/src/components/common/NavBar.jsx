@@ -1,4 +1,3 @@
-// src/components/common/NavBar.jsx
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
@@ -9,7 +8,8 @@ import {
   Bars3Icon,
   XMarkIcon,
   SunIcon,
-  MoonIcon
+  MoonIcon,
+  LightBulbIcon
 } from '@heroicons/react/24/outline';
 import { motion } from 'framer-motion';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -22,8 +22,9 @@ const NavBar = () => {
   const { user } = useAuth();
   
   const navItems = [
-    { name: 'Home', path: '/', icon: HomeIcon },
+    { name: 'Início', path: '/', icon: HomeIcon },
     { name: 'Treinos', path: '/workouts', icon: ClipboardDocumentListIcon },
+    { name: 'Exercícios', path: '/exercises', icon: LightBulbIcon },
     { name: 'Progresso', path: '/progress', icon: ChartBarIcon },
     { name: 'Perfil', path: '/profile', icon: UserIcon },
   ];
@@ -105,7 +106,7 @@ const NavBar = () => {
                 key={item.name}
                 to={item.path}
                 className={`flex items-center p-3 rounded-lg ${
-                  location.pathname === item.path
+                  location.pathname === item.path || location.pathname.startsWith(item.path + '/')
                     ? 'bg-primary-50 dark:bg-gray-700 text-primary-600 dark:text-primary-400'
                     : 'hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}

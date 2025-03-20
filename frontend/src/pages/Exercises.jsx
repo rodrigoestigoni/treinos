@@ -1,24 +1,23 @@
-// src/pages/Exercises.jsx
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
+import NavBar from '../components/common/NavBar';
 import { 
   MagnifyingGlassIcon, 
   PlusIcon, 
   AdjustmentsHorizontalIcon,
-  XMarkIcon
+  XMarkIcon,
+  TagIcon
 } from '@heroicons/react/24/outline';
-import { motion, AnimatePresence } from 'framer-motion';
-import NavBar from '../components/common/NavBar';
-import axios from 'axios';
-import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../contexts/ToastContext';
 
 const Exercises = () => {
   const { token } = useAuth();
   const { errorToast } = useToast();
   const [exercises, setExercises] = useState([]);
   const [muscleGroups, setMuscleGroups] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     difficulty: '',
@@ -147,60 +146,50 @@ const Exercises = () => {
             </button>
           </div>
           
-          <AnimatePresence>
-            {showFilters && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="overflow-hidden"
-              >
-                <div className="border-t border-gray-200 dark:border-gray-700 mt-4 pt-4 space-y-4 md:flex md:space-y-0 md:space-x-4">
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Nível de dificuldade
-                    </label>
-                    <select
-                      value={filters.difficulty}
-                      onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">Todos</option>
-                      <option value="beginner">Iniciante</option>
-                      <option value="intermediate">Intermediário</option>
-                      <option value="advanced">Avançado</option>
-                    </select>
-                  </div>
-                  
-                  <div className="flex-1">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Grupo muscular
-                    </label>
-                    <select
-                      value={filters.muscleGroup}
-                      onChange={(e) => setFilters({ ...filters, muscleGroup: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    >
-                      <option value="">Todos</option>
-                      {muscleGroups.map(group => (
-                        <option key={group.id} value={group.id}>{group.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  
-                  <div className="flex items-end">
-                    <button
-                      onClick={resetFilters}
-                      className="w-full md:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      Limpar filtros
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {showFilters && (
+            <div className="border-t border-gray-200 dark:border-gray-700 mt-4 pt-4 space-y-4 md:flex md:space-y-0 md:space-x-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Nível de dificuldade
+                </label>
+                <select
+                  value={filters.difficulty}
+                  onChange={(e) => setFilters({ ...filters, difficulty: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Todos</option>
+                  <option value="beginner">Iniciante</option>
+                  <option value="intermediate">Intermediário</option>
+                  <option value="advanced">Avançado</option>
+                </select>
+              </div>
+              
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Grupo muscular
+                </label>
+                <select
+                  value={filters.muscleGroup}
+                  onChange={(e) => setFilters({ ...filters, muscleGroup: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Todos</option>
+                  {muscleGroups.map(group => (
+                    <option key={group.id} value={group.id}>{group.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="flex items-end">
+                <button
+                  onClick={resetFilters}
+                  className="w-full md:w-auto px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Limpar filtros
+                </button>
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Exercise Grid */}
@@ -231,14 +220,15 @@ const Exercises = () => {
                         <span className="text-gray-400 dark:text-gray-500 text-xl">Sem imagem</span>
                       </div>
                     )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 via-black/40 to-transparent p-3">
+                      <h3 className="text-lg font-semibold text-white">{exercise.name}</h3>
+                    </div>
                     <span className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-medium ${bgColor} ${textColor}`}>
                       {label}
                     </span>
                   </div>
                   
                   <div className="p-4">
-                    <h3 className="text-lg font-semibold mb-1">{exercise.name}</h3>
-                    
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
                       {exercise.description}
                     </p>
@@ -253,6 +243,14 @@ const Exercises = () => {
                         </span>
                       ))}
                     </div>
+                    
+                    {exercise.tags && exercise.tags.length > 0 && (
+                      <div className="mt-3 flex items-center text-xs text-gray-500 dark:text-gray-400">
+                        <TagIcon className="h-3 w-3 mr-1" />
+                        {exercise.tags.slice(0, 3).join(', ')}
+                        {exercise.tags.length > 3 && '...'}
+                      </div>
+                    )}
                   </div>
                 </Link>
               );

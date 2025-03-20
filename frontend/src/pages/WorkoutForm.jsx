@@ -12,7 +12,7 @@ import {
   ChevronDownIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
-  PencilSquareIcon
+  PencilIcon
 } from '@heroicons/react/24/outline';
 import axios from 'axios';
 
@@ -47,6 +47,7 @@ const WorkoutForm = () => {
   // Exercise form state (for adding/editing workout exercises)
   const [exerciseForm, setExerciseForm] = useState({
     exercise_id: '',
+    exercise_detail: null,
     sets: 3,
     target_reps: 12,
     rest_duration: 60,
@@ -181,12 +182,15 @@ const WorkoutForm = () => {
     }));
   };
   
+  // CORRIGIDO: Agora imediatamente configura o exerciseForm com detalhes e passa para 
+  // a etapa de configuração de séries/repetições
   const addExercise = (exerciseId) => {
     const exercise = exercises.find(ex => ex.id === exerciseId);
     
     if (exercise) {
       setExerciseForm({
         exercise_id: exercise.id,
+        exercise_detail: exercise,
         sets: 3,
         target_reps: 12,
         rest_duration: 60,
@@ -195,6 +199,7 @@ const WorkoutForm = () => {
         superset_with: []
       });
       
+      // Fechar o seletor de exercícios e não resetar o formulário
       setShowExerciseSelector(false);
       setEditingExerciseIndex(null);
     }
@@ -206,13 +211,15 @@ const WorkoutForm = () => {
       return;
     }
     
-    const exercise = exercises.find(ex => ex.id === exerciseForm.exercise_id);
+    // O exercício já está no exerciseForm agora
+    const exercise = exerciseForm.exercise_detail || exercises.find(ex => ex.id === exerciseForm.exercise_id);
     
     if (!exercise) {
       errorToast('Exercício não encontrado');
       return;
     }
     
+    // Usar os detalhes já disponíveis
     const newExercise = {
       ...exerciseForm,
       exercise_detail: exercise
@@ -240,6 +247,7 @@ const WorkoutForm = () => {
     // Reset exercise form
     setExerciseForm({
       exercise_id: '',
+      exercise_detail: null,
       sets: 3,
       target_reps: 12,
       rest_duration: 60,
@@ -256,6 +264,7 @@ const WorkoutForm = () => {
     
     setExerciseForm({
       exercise_id: exerciseToEdit.exercise_id,
+      exercise_detail: exerciseToEdit.exercise_detail,
       sets: exerciseToEdit.sets,
       target_reps: exerciseToEdit.target_reps,
       rest_duration: exerciseToEdit.rest_duration,
@@ -489,6 +498,7 @@ const WorkoutForm = () => {
                   setEditingExerciseIndex(null);
                   setExerciseForm({
                     exercise_id: '',
+                    exercise_detail: null,
                     sets: 3,
                     target_reps: 12,
                     rest_duration: 60,
@@ -591,7 +601,7 @@ const WorkoutForm = () => {
                           onClick={() => editExercise(index)}
                           className="p-1 text-gray-500 hover:text-primary-600"
                         >
-                          <PencilSquareIcon className="h-5 w-5" />
+                          <PencilIcon className="h-5 w-5" />
                         </button>
                         <button
                           type="button"
@@ -641,11 +651,30 @@ const WorkoutForm = () => {
             <div className="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">
-                  {editingExerciseIndex !== null ? 'Editar Exercício' : 'Adicionar Exercício ao Treino'}
+                  {exerciseForm.exercise_id 
+                    ? 'Configurar Exercício' 
+                    : (editingExerciseIndex !== null 
+                        ? 'Editar Exercício' 
+                        : 'Adicionar Exercício ao Treino')}
                 </h3>
                 <button
                   type="button"
-                  onClick={() => setShowExerciseSelector(false)}
+                  onClick={() => {
+                    setShowExerciseSelector(false);
+                    // Apenas limpar se não estiver configurando um exercício
+                    if (!exerciseForm.exercise_id) {
+                      setExerciseForm({
+                        exercise_id: '',
+                        exercise_detail: null,
+                        sets: 3,
+                        target_reps: 12,
+                        rest_duration: 60,
+                        notes: '',
+                        is_superset: false,
+                        superset_with: []
+                      });
+                    }
+                  }}
                   className="text-gray-500 hover:text-gray-700"
                 >
                   <XMarkIcon className="h-6 w-6" />
@@ -657,10 +686,10 @@ const WorkoutForm = () => {
                 <div className="space-y-4">
                   <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
                     <h4 className="font-medium text-lg mb-1">
-                      {exercises.find(ex => ex.id === exerciseForm.exercise_id)?.name}
+                      {exerciseForm.exercise_detail?.name || ''}
                     </h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {exercises.find(ex => ex.id === exerciseForm.exercise_id)?.description}
+                      {exerciseForm.exercise_detail?.description || ''}
                     </p>
                   </div>
                   
@@ -777,8 +806,10 @@ const WorkoutForm = () => {
                     <button
                       type="button"
                       onClick={() => {
+                        // Voltar para seleção de exercícios
                         setExerciseForm({
                           exercise_id: '',
+                          exercise_detail: null,
                           sets: 3,
                           target_reps: 12,
                           rest_duration: 60,
