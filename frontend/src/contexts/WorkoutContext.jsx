@@ -47,7 +47,8 @@ export const WorkoutProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  }, [token, isAuthenticated, errorToast, getHeaders, apiBaseUrl]);
+  // Dependências corretas e estáveis
+  }, [isAuthenticated, token, apiBaseUrl, getHeaders, errorToast]);
 
   // Carregar treinos apenas uma vez na inicialização
   useEffect(() => {

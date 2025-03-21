@@ -1,4 +1,3 @@
-//ActiveWorkout.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -43,9 +42,9 @@ const ActiveWorkout = () => {
   const [weights, setWeights] = useState({});
   const [previousWorkoutData, setPreviousWorkoutData] = useState(null);
   
-  // References for sounds
+  // References for tracking initialization
   const sessionInitiatedRef = useRef(false);
-  
+  const workoutLoadedRef = useRef(false);
   
   // Vibration patterns
   const vibrationPatterns = {
@@ -89,7 +88,13 @@ const ActiveWorkout = () => {
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
   
+  // Load workout details
   useEffect(() => {
+    // Evitar carregar várias vezes
+    if (workoutLoadedRef.current) return;
+    
+    workoutLoadedRef.current = true;
+    
     const loadWorkoutDetails = async () => {
       try {
         setLoading(true);
@@ -111,7 +116,6 @@ const ActiveWorkout = () => {
             };
           });
           setExerciseProgress(progress);
-          
         }
       } catch (error) {
         console.error('Error loading workout:', error);
@@ -122,9 +126,9 @@ const ActiveWorkout = () => {
     };
     
     loadWorkoutDetails();
-  }, [workoutId, getWorkoutById, errorToast]); // REMOVA startWorkout das dependências
+  }, [workoutId, getWorkoutById, errorToast]);
   
-  // Segundo useEffect - só para iniciar a sessão depois que o treino foi carregado
+  // Separate useEffect for starting the session - only after workout is loaded
   useEffect(() => {
     // Só executa quando o workout foi carregado e ainda não temos uma sessão
     if (!workout || sessionId || sessionInitiatedRef.current) return;
@@ -145,11 +149,7 @@ const ActiveWorkout = () => {
     };
     
     startSession();
-    
-    return () => {
-        sessionInitiatedRef.current = false;
-    };
-  }, [workout, sessionId, workoutId]);
+  }, [workout, sessionId, workoutId, startWorkout, errorToast]);
   
   // Handle beforeunload event to warn user if they try to navigate away
   useEffect(() => {
@@ -165,15 +165,6 @@ const ActiveWorkout = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
-  
-  // Play sound with fallback
-  const playSound = (sound) => {
-    if (!soundEnabled || !sound.current) return;
-    
-    sound.current.play().catch(e => {
-      console.log("Erro ao tocar áudio:", e);
-    });
-  };
   
   // Vibrate with pattern
   const vibrate = (pattern) => {

@@ -10,6 +10,7 @@ import {
   SpeakerXMarkIcon
 } from '@heroicons/react/24/solid';
 import { playSound as playSoundUtil } from '../../utils/sounds';
+
 const WorkoutTimer = ({ 
   exerciseDuration = 0, 
   restDuration = 60, 
@@ -17,9 +18,8 @@ const WorkoutTimer = ({
   exerciseName,
   setNumber,
   totalSets,
-  setMode,
   mode,
-  playSound = true  // Esta é a prop
+  playSound = true
 }) => {
   const [timeLeft, setTimeLeft] = useState(mode === 'exercise' ? (exerciseDuration > 0 ? exerciseDuration : 0) : restDuration);
   const [isActive, setIsActive] = useState(false);
@@ -33,6 +33,7 @@ const WorkoutTimer = ({
   const countdownRef = useRef(null);
   const totalTime = mode === 'exercise' ? exerciseDuration : restDuration;
   
+  // Limpar os timers quando o componente desmontar
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -45,13 +46,14 @@ const WorkoutTimer = ({
     setIsMuted(!playSound);
   }, [playSound]);
   
+  // Reiniciar timer quando o modo mudar
   useEffect(() => {
-    // Reiniciar timer quando o modo mudar
     setTimeLeft(mode === 'exercise' ? (exerciseDuration > 0 ? exerciseDuration : 0) : restDuration);
     setProgress(100);
     setIsActive(false);
   }, [mode, exerciseDuration, restDuration]);
   
+  // Efeito principal do timer
   useEffect(() => {
     if (isActive) {
       timerRef.current = setInterval(() => {
@@ -61,7 +63,7 @@ const WorkoutTimer = ({
             
             // Tocar som de notificação
             if (!isMuted) {
-              playSoundUtil('notification');  // Use a função renomeada
+              playSoundUtil('notification');
             }
             
             // Vibrar o dispositivo
@@ -69,16 +71,12 @@ const WorkoutTimer = ({
               navigator.vibrate(200);
             }
             
-            // Trocar modo ou finalizar
-            if (mode === 'exercise') {
-              setMode('rest');
-              setTimeLeft(restDuration);
-              setProgress(100);
-              return 0;
-            } else {
-              if (onComplete) onComplete();
-              return 0;
+            // Quando o timer chega a zero, chamamos onComplete
+            if (onComplete) {
+              onComplete();
             }
+            
+            return 0;
           }
           
           const newTime = prevTime - 1;
@@ -87,9 +85,9 @@ const WorkoutTimer = ({
           // Tocar sons nos últimos 3 segundos
           if (newTime <= 3 && !isMuted) {
             if (newTime === 0) {
-              playSoundUtil('finalTick');  // Use a função renomeada
+              playSoundUtil('finalTick');
             } else {
-              playSoundUtil('tick');  // Use a função renomeada
+              playSoundUtil('tick');
             }
             
             // Vibrar o dispositivo a cada segundo nos últimos 3 segundos
@@ -106,7 +104,7 @@ const WorkoutTimer = ({
     }
   
     return () => clearInterval(timerRef.current);
-  }, [isActive, mode, exerciseDuration, restDuration, totalTime, onComplete, isMuted]);
+  }, [isActive, totalTime, onComplete, isMuted]);
   
   const startCountdown = () => {
     setShowCountdown(true);
@@ -145,10 +143,8 @@ const WorkoutTimer = ({
   };
 
   const skipToRest = () => {
-    if (mode === 'exercise') {
-      clearInterval(timerRef.current);
-      if (onComplete) onComplete();
-    }
+    clearInterval(timerRef.current);
+    if (onComplete) onComplete();
   };
   
   const toggleMute = () => {
