@@ -32,6 +32,7 @@ const ActiveWorkout = () => {
   const [isResting, setIsResting] = useState(false);
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [exerciseProgress, setExerciseProgress] = useState({});
+  const [currentExerciseTime, setCurrentExerciseTime] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [workoutStartTime, setWorkoutStartTime] = useState(null);
@@ -41,6 +42,7 @@ const ActiveWorkout = () => {
   const [sessionId, setSessionId] = useState(null);
   const [weights, setWeights] = useState({});
   const [previousWorkoutData, setPreviousWorkoutData] = useState(null);
+  const [shouldAutoStart, setShouldAutoStart] = useState(false);
   
   // References for tracking initialization
   const sessionInitiatedRef = useRef(false);
@@ -165,6 +167,17 @@ const ActiveWorkout = () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, []);
+
+  useEffect(() => {
+    // Se não estamos em modo de descanso (estamos em exercício) e shouldAutoStart foi definido,
+    // resetamos para preparar a próxima transição
+    if (!isResting && shouldAutoStart) {
+      // Pequeno delay para garantir que o auto-start seja detectado
+      setTimeout(() => {
+        setShouldAutoStart(false);
+      }, 500);
+    }
+  }, [isResting, shouldAutoStart]);
   
   // Vibrate with pattern
   const vibrate = (pattern) => {
@@ -214,6 +227,20 @@ const ActiveWorkout = () => {
     playSound('exerciseComplete');
     vibrate(vibrationPatterns.exerciseComplete);
     
+    // Registre o tempo que o usuário levou para completar o exercício
+    const timeTaken = currentExerciseTime;
+    
+    // Atualize o progresso incluindo o tempo gasto
+    const updatedProgress = { ...exerciseProgress };
+    updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex] = {
+      completed: true,
+      actualReps: updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].actualReps,
+      weight: weights[currentExercise.exercise_detail.id] || 0,
+      timeTaken: timeTaken
+    };
+    setExerciseProgress(updatedProgress);
+    
+    // Inicie o período de descanso
     setIsResting(true);
   };
   
@@ -222,14 +249,16 @@ const ActiveWorkout = () => {
     playSound('restComplete');
     vibrate(vibrationPatterns.restComplete);
     
-    setIsResting(false);
-    
+    setShouldAutoStart(true);
     // Update progress for this set
     const updatedProgress = { ...exerciseProgress };
+    const timeTaken = updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].timeTaken || 0;
+    
     updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex] = {
       completed: true,
       actualReps: updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].actualReps,
-      weight: weights[currentExercise.exercise_detail.id] || 0
+      weight: weights[currentExercise.exercise_detail.id] || 0,
+      timeTaken: timeTaken
     };
     setExerciseProgress(updatedProgress);
     
@@ -238,9 +267,10 @@ const ActiveWorkout = () => {
       recordExerciseSet(
         sessionId, 
         currentExercise.exercise_detail.id, 
-        currentSetIndex + 1, // API expects 1-indexed set numbers
+        currentSetIndex + 1,
         updatedProgress[currentExercise.exercise_detail.id].sets[currentSetIndex].actualReps,
-        weights[currentExercise.exercise_detail.id]
+        weights[currentExercise.exercise_detail.id],
+        timeTaken
       );
     }
     
@@ -263,6 +293,9 @@ const ActiveWorkout = () => {
       // Next set of same exercise
       setCurrentSetIndex(prev => prev + 1);
     }
+    
+    // Mudar para modo exercício
+    setIsResting(false);
   };
   
   const handleUpdateReps = (exercise, setIndex, newValue) => {
@@ -420,7 +453,7 @@ const ActiveWorkout = () => {
                 </AnimatePresence>
                 
                 {/* Timer component */}
-                <WorkoutTimer 
+                <WorkoutTimer
                   exerciseName={currentExercise.exercise_detail?.name}
                   setNumber={currentSet}
                   totalSets={totalSets}
@@ -429,6 +462,8 @@ const ActiveWorkout = () => {
                   restDuration={currentExercise.rest_duration || 60}
                   onComplete={isResting ? handleRestComplete : handleExerciseComplete}
                   playSound={soundEnabled}
+                  onTimeUpdate={setCurrentExerciseTime}
+                  autoStart={!isResting && shouldAutoStart}
                 />
                 
                 {!isResting && (

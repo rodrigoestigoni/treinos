@@ -180,7 +180,7 @@ export const WorkoutProvider = ({ children }) => {
     }
   };
 
-  const recordExerciseSet = async (sessionId, exerciseId, setNumber, actualReps, weight = null) => {
+  const recordExerciseSet = async (sessionId, exerciseId, setNumber, actualReps, weight = null, timeTaken = null) => {
     if (!isAuthenticated || !token) return null;
     
     setLoading(true);
@@ -191,7 +191,8 @@ export const WorkoutProvider = ({ children }) => {
         exercise_id: exerciseId,
         set_number: setNumber,
         actual_reps: actualReps,
-        weight: weight
+        weight: weight,
+        time_taken: timeTaken
       }, getHeaders());
       
       return response.data;
