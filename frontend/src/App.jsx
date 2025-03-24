@@ -1,10 +1,11 @@
-// Modificação para App.jsx - Adicionar contexto de tema
+// Modificação para App.jsx - Adicionar ExerciseProvider
 import React from 'react';
 import { BrowserRouter as Router } from 'react-router-dom';
 import { ThemeProvider } from './contexts/ThemeContext';
 import AppRoutes from './routes';
 import { AuthProvider } from './contexts/AuthContext';
 import { WorkoutProvider } from './contexts/WorkoutContext';
+import { ExerciseProvider } from './contexts/ExerciseContext';
 import { ToastProvider } from './contexts/ToastContext';
 import Toast from './components/common/Toast';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -16,14 +17,16 @@ function App() {
   return (
     <Router>
       <ErrorBoundary>
-        <ThemeProvider> {/* Novo provider */}
+        <ThemeProvider>
           <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
             <AuthProvider>
               <ToastProvider>
-                <WorkoutProvider>
-                  <AppRoutes />
-                  <Toast />
-                </WorkoutProvider>
+                <ExerciseProvider>
+                  <WorkoutProvider>
+                    <AppRoutes />
+                    <Toast />
+                  </WorkoutProvider>
+                </ExerciseProvider>
               </ToastProvider>
             </AuthProvider>
           </div>
